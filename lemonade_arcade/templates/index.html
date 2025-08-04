@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lemonade Arcade</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="server-status" id="serverStatus">
+                <div class="status-indicator status-offline" id="statusIndicator"></div>
+                <span id="statusText">Checking...</span>
+            </div>
+            <div class="title">
+                ██╗     ███████╗███╗   ███╗ ██████╗ ███╗   ██╗ █████╗ ██████╗ ███████╗<br>
+                ██║     ██╔════╝████╗ ████║██╔═══██╗████╗  ██║██╔══██╗██╔══██╗██╔════╝<br>
+                ██║     █████╗  ██╔████╔██║██║   ██║██╔██╗ ██║███████║██║  ██║█████╗<br>
+                ██║     ██╔══╝  ██║╚██╔╝██║██║   ██║██║╚██╗██║██╔══██║██║  ██║██╔══╝<br>
+                ███████╗███████╗██║ ╚═╝ ██║╚██████╔╝██║ ╚████║██║  ██║██████╔╝███████╗<br>
+                ╚══════╝╚══════╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚═════╝ ╚══════╝<br>
+                <br>
+                 █████╗ ██████╗  ██████╗ █████╗ ██████╗ ███████╗<br>
+                ██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝<br>
+                ███████║██████╔╝██║     ███████║██║  ██║█████╗<br>
+                ██╔══██║██╔══██╗██║     ██╔══██║██║  ██║██╔══╝<br>
+                ██║  ██║██║  ██║╚██████╗██║  ██║██████╔╝███████╗<br>
+                ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝ ╚══════╝
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="game-library">
+                <div class="library-title">Game Library</div>
+                <div class="spinner" id="gameSpinner">
+                    <div class="spinner-circle"></div>
+                    <div class="status-text" id="spinnerStatus">Generating game...</div>
+                </div>
+                <div class="games-grid" id="gamesGrid">
+                    <div class="empty-library">
+                        No games yet. Create your first game below!
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="sidecar">
+            <div class="sidecar-title">LLM Output</div>
+            <div class="llm-output" id="llmOutput">Ready to generate games...</div>
+        </div>
+        
+        <div class="input-area">
+            <select class="model-select" id="modelSelect">
+                <option>Loading models...</option>
+            </select>
+            <input type="text" class="prompt-input" id="promptInput" 
+                   placeholder="Describe the game you want to create (e.g., 'snake but the food moves')" />
+            <button class="create-btn" id="createBtn" onclick="createGame()">Create Game</button>
+        </div>
+    </div>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html>
