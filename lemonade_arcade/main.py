@@ -19,7 +19,7 @@ from typing import Dict, List, Optional
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -295,7 +295,15 @@ Generate ONLY the Python code in a single code block. Do not include any explana
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
-    return app.response_class(generate(), media_type="text/plain")
+    return StreamingResponse(
+        generate(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/plain; charset=utf-8",
+        },
+    )
 
 
 @app.post("/api/launch-game/{game_id}")

@@ -135,10 +135,11 @@ async function createGame() {
             if (done) break;
             
             const chunk = decoder.decode(value);
-            const lines = chunk.split('\\n');
+            const lines = chunk.split('\n');
             
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
+                    console.log('Received streaming data:', line); // Debug log
                     try {
                         const data = JSON.parse(line.slice(6));
                         if (data.type === 'content') {
@@ -154,22 +155,55 @@ async function createGame() {
                             if (data.game_id) {
                                 runningGameId = data.game_id;
                                 renderGames();
+                                // Keep spinner active for playing state
+                                document.getElementById('spinnerStatus').textContent = 'Playing game...';
+                                startGameStatusCheck();
+                                // Don't hide spinner here - game is now running
+                            } else {
+                                // No game launched, hide spinner
+                                isGenerating = false;
+                                document.getElementById('createBtn').disabled = false;
+                                document.getElementById('gameSpinner').classList.remove('active');
+                                document.getElementById('gamesGrid').style.display = 'grid';
                             }
+                        } else if (data.type === 'error') {
+                            document.getElementById('llmOutput').innerHTML = `<div class="error-message">Error: ${data.message}</div>`;
+                            // Hide spinner on error
+                            isGenerating = false;
+                            document.getElementById('createBtn').disabled = false;
+                            document.getElementById('gameSpinner').classList.remove('active');
+                            document.getElementById('gamesGrid').style.display = 'grid';
                         }
                     } catch (e) {
-                        // Ignore JSON parse errors for partial chunks
+                        // Handle potential streaming chunks from SSE format
+                        // Check if it's a streaming chunk that needs different parsing
+                        if (line.trim() === 'data: [DONE]' || line.trim() === '[DONE]') continue;
+                        
+                        // Try to parse as OpenAI streaming format
+                        try {
+                            const streamData = JSON.parse(line.slice(6));
+                            if (streamData.choices && streamData.choices[0] && streamData.choices[0].delta && streamData.choices[0].delta.content) {
+                                const content = streamData.choices[0].delta.content;
+                                fullResponse += content;
+                                document.getElementById('llmOutput').textContent = fullResponse;
+                                document.getElementById('llmOutput').scrollTop = document.getElementById('llmOutput').scrollHeight;
+                            }
+                        } catch (e2) {
+                            // Ignore JSON parse errors for partial chunks
+                        }
                     }
                 }
             }
         }
     } catch (error) {
         document.getElementById('llmOutput').innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
-    } finally {
+        // Hide spinner on error
         isGenerating = false;
         document.getElementById('createBtn').disabled = false;
         document.getElementById('gameSpinner').classList.remove('active');
         document.getElementById('gamesGrid').style.display = 'grid';
     }
+    // Note: We don't use finally here because state is managed by the streaming events
 }
 
 // Launch a game
@@ -179,6 +213,11 @@ async function launchGame(gameId) {
         return;
     }
     
+    // Show spinner for launching
+    document.getElementById('gameSpinner').classList.add('active');
+    document.getElementById('gamesGrid').style.display = 'none';
+    document.getElementById('spinnerStatus').textContent = 'Launching game...';
+    
     try {
         const response = await fetch(`/api/launch-game/${gameId}`, {
             method: 'POST'
@@ -187,12 +226,19 @@ async function launchGame(gameId) {
         if (response.ok) {
             runningGameId = gameId;
             renderGames();
+            document.getElementById('spinnerStatus').textContent = 'Playing game...';
             startGameStatusCheck();
         } else {
             alert('Failed to launch game');
+            // Hide spinner on failure
+            document.getElementById('gameSpinner').classList.remove('active');
+            document.getElementById('gamesGrid').style.display = 'grid';
         }
     } catch (error) {
         alert('Error launching game: ' + error.message);
+        // Hide spinner on error
+        document.getElementById('gameSpinner').classList.remove('active');
+        document.getElementById('gamesGrid').style.display = 'grid';
     }
 }
 
@@ -211,6 +257,9 @@ async function deleteGame(gameId) {
             delete games[gameId];
             if (runningGameId === gameId) {
                 runningGameId = null;
+                // Hide spinner when running game is deleted
+                document.getElementById('gameSpinner').classList.remove('active');
+                document.getElementById('gamesGrid').style.display = 'grid';
             }
             renderGames();
         } else {
@@ -233,12 +282,18 @@ function startGameStatusCheck() {
             if (!data.running) {
                 runningGameId = null;
                 renderGames();
+                // Hide spinner when game finishes
+                document.getElementById('gameSpinner').classList.remove('active');
+                document.getElementById('gamesGrid').style.display = 'grid';
                 return;
             }
         } catch (error) {
             // Game probably finished
             runningGameId = null;
             renderGames();
+            // Hide spinner when game finishes
+            document.getElementById('gameSpinner').classList.remove('active');
+            document.getElementById('gamesGrid').style.display = 'grid';
             return;
         }
         
