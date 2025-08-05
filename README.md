@@ -1,25 +1,33 @@
-# Lemonade Arcade
+# 🍋 Lemonade Arcade
 
-🍋 An AI-powered game generator and arcade that creates playable Python games using LLMs.
+![Lemonade Arcade Banner](./img/banner.png)
+
+An AI-powered game generator and arcade that creates playable Python games using LLMs.
 
 ## Overview
 
-Lemonade Arcade is a unique application that combines the convenience of a ChatGPT-like interface with the concept of a game emulator. Instead of emulating existing games, it uses Large Language Models (served by Lemonade Server) to generate completely new games based on your prompts, then lets you play them instantly.
+Lemonade Arcade combines the convenience of a ChatGPT-like interface with the concept of a game emulator. Instead of emulating existing games, it uses LLMs (served by [Lemonade](https://github.com/lemonade-sdk/lemonade)) to generate completely new games based on your prompts, then lets you play them instantly.
 
 ## Features
 
-- **AI Game Generation**: Describe any game concept and watch as an LLM creates a playable Python game
-- **Real-time Streaming**: Watch the LLM generate code in real-time in the sidebar
-- **Game Library**: All generated games are saved and can be replayed anytime
-- **No External Assets**: Games are generated using only Python and pygame - no images or files needed
-- **Retro Arcade UI**: Dark, arcade-style interface with ASCII art branding
-- **Easy Management**: Delete games you don't want with a simple click
+- **Lemonade integration**: automatically connects to Lemonade Server and has access to any Lemonade LLM.
+- **AI Game Generation**: Describe a game concept and watch as an LLM creates a playable Python game.
+- **Game Library**: All generated games are saved and can be replayed anytime.
+- **Easy Management**: View game source code, copy prompts for remixing, and delete games you don't want with a simple click.
 
 ## Requirements
 
-- Python 3.8 or higher
-- [Lemonade Server](https://lemonade-server.ai) running locally
-- Modern web browser
+### LLM and Hardware
+
+We strongly recommend using code-tuned models size 24B and larger. Look for the "CODING" label in the Lemonade model manager.
+
+To run these, you will need a computer with at least 32 GB of system RAM and/or 16 GB of VRAM.
+
+### Software
+
+- Python 3.8 or higher ([Miniforge](https://conda-forge.org/download/) recommended).
+- [Lemonade Server](https://lemonade-server.ai) installed and running, with at least one model downloaded.
+- Chromium-based web browser.
 
 ## Installation
 
@@ -34,7 +42,7 @@ Lemonade Arcade is a unique application that combines the convenience of a ChatG
    pip install -e .
    ```
 
-3. Make sure Lemonade Server is running with at least one language model loaded.
+3. Make sure Lemonade Server is running with at least one coding LLM installed.
 
 ## Usage
 
@@ -43,35 +51,39 @@ Lemonade Arcade is a unique application that combines the convenience of a ChatG
    lemonade-arcade
    ```
 
-2. The application will automatically open in your web browser at `http://localhost:8080`
+2. The application will automatically open in your web browser at `http://localhost:8080`.
 
-3. Check that the status indicator shows Lemonade Server is online (🍋)
+3. Check that the status indicator shows Lemonade Server is online (🍋).
 
-4. Select a model from the dropdown
+4. Select a model from the dropdown.
 
 5. Enter a game description in the prompt box, for example:
    - "Create a snake game but the food moves around"
-   - "Make a space invaders clone with rainbow colors"
+   - "Make space invaders with rainbow colors"
    - "Build a simple platformer where you collect coins"
 
 6. Click "Create Game" and watch the magic happen!
 
-7. Once generated, the game will automatically launch and be added to your library
+7. Once generated, the game will automatically launch and be added to your library.
 
-8. Click any game in your library to play it again
+8. Click any game in your library to play it again.
 
-9. Hover over games and click the X button to delete games you no longer want
+9. Hover over games and click the X button to delete games you no longer want. Right click games to get their Python source code and prompt.
 
 ## Game Generation
 
 Games are generated with the following constraints:
-- Pure Python using the pygame library only
-- No external images, sounds, or asset files
-- Complete and playable with proper game mechanics
-- Proper event handling and game loops
-- Visual appeal using pygame's built-in drawing functions
+- Pure Python using the pygame library only.
+- No external images, sounds, or asset files.
+- Complete and playable with proper game mechanics.
+- Proper event handling and game loops.
+- Visual appeal using pygame's built-in drawing functions.
 
-## File Structure
+> Note: LLMs are imperfect, and may fail to generate the game you asked for or fail to generate a functioning game at all. Code-tuned LLMs of size 24B or larger are strongly recommended.
+
+## Game Cache
+
+Games are cached under the `.lemonade-arcade` folder in your home directory.
 
 ```
 ~/.lemonade-arcade/
@@ -84,19 +96,18 @@ Games are generated with the following constraints:
 ## Troubleshooting
 
 ### "Server Offline" Status
-- Ensure Lemonade Server is running on `http://localhost:8000`
-- Check that you have models loaded in Lemonade Server
-- Visit [lemonade-server.ai](https://lemonade-server.ai) for setup instructions
+- Ensure Lemonade Server is running on `http://localhost:8000`.
+- Check that you have models installed in Lemonade Server by opening the model manager: http://localhost:8000/#model-management.
+- Visit [lemonade-server.ai](https://lemonade-server.ai) for setup instructions.
 
 ### Game Won't Launch
-- Make sure pygame is installed: `pip install pygame`
-- Check the generated code for any syntax errors
-- Try regenerating the game with a more specific prompt
+- Check the generated code for any syntax errors.
+- Try regenerating the game with a more specific prompt.
 
 ### Generation Failures
-- Try a simpler game concept
-- Make sure your selected model supports code generation
-- Check Lemonade Server logs for errors
+- Try a simpler game concept.
+- Make sure your selected model supports code generation.
+- Check the `lemonade-arcade` and Lemonade Server logs for errors.
 
 ## Examples
 
@@ -109,14 +120,18 @@ Here are some example prompts that work well:
 ## Contributing
 
 Contributions are welcome! Feel free to:
-- Report bugs or request features via GitHub issues
-- Submit pull requests for improvements
-- Share interesting game prompts and results
+- Report bugs or request features via GitHub issues.
+- Submit pull requests for improvements.
+- Share interesting game prompts and results.
 
 ## License
 
-This project is licensed under the same terms as the main Lemonade project.
+This project is licensed under the [MIT license](./LICENSE).
 
-## Credits
+## Maintainer
 
-Powered by [Lemonade Server](https://lemonade-server.ai) - bringing AI to your local machine.
+This project is maintained by @jeremyfowers.
+
+## Notice
+
+Most of the code for this project was generated by AI.
