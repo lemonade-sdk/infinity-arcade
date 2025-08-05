@@ -14,11 +14,12 @@ body {
 
 .container {
     display: grid;
-    grid-template-columns: 1fr 350px;
+    grid-template-columns: 2fr 1fr;
     grid-template-rows: auto 1fr auto;
-    min-height: 100vh;
+    height: 100vh;
     gap: 20px;
     padding: 20px;
+    overflow: hidden;
 }
 
 .header {
@@ -95,8 +96,9 @@ body {
     border: 2px solid #00ff41;
     border-radius: 10px;
     padding: 20px;
-    flex: 1;
-    min-height: 400px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .library-title {
@@ -111,6 +113,8 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 15px;
+    overflow-y: auto;
+    flex: 1;
 }
 
 .game-item {
@@ -183,7 +187,7 @@ body {
     padding: 20px;
     display: flex;
     flex-direction: column;
-    max-height: calc(100vh - 200px);
+    overflow: hidden;
 }
 
 .sidecar-title {
@@ -332,11 +336,13 @@ body {
     .container {
         grid-template-columns: 1fr;
         grid-template-rows: auto auto 1fr auto;
+        height: 100vh;
     }
     
     .sidecar {
         order: 2;
         max-height: 300px;
+        overflow: hidden;
     }
     
     .main-content {
