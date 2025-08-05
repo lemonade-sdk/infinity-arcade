@@ -1,6 +1,81 @@
 let isGenerating = false;
 let games = {};
 let runningGameId = null;
+let selectedGameId = null;
+
+// Context menu functionality
+function showContextMenu(x, y, gameId) {
+    const contextMenu = document.getElementById('contextMenu');
+    selectedGameId = gameId;
+    
+    contextMenu.style.display = 'block';
+    contextMenu.style.left = x + 'px';
+    contextMenu.style.top = y + 'px';
+    
+    // Ensure menu doesn't go off screen
+    const rect = contextMenu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        contextMenu.style.left = (window.innerWidth - rect.width - 10) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+        contextMenu.style.top = (window.innerHeight - rect.height - 10) + 'px';
+    }
+}
+
+function hideContextMenu() {
+    document.getElementById('contextMenu').style.display = 'none';
+    selectedGameId = null;
+}
+
+// Context menu actions
+async function openGameFile() {
+    if (!selectedGameId) return;
+    
+    try {
+        const response = await fetch(`/api/open-game-file/${selectedGameId}`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            console.log('File opened successfully');
+        } else {
+            const error = await response.json();
+            alert('Failed to open file: ' + (error.detail || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error opening file: ' + error.message);
+    }
+    hideContextMenu();
+}
+
+async function copyPrompt() {
+    if (!selectedGameId) return;
+    
+    try {
+        const response = await fetch(`/api/game-metadata/${selectedGameId}`);
+        if (response.ok) {
+            const metadata = await response.json();
+            const prompt = metadata.prompt || 'No prompt available';
+            
+            // Copy to clipboard
+            await navigator.clipboard.writeText(prompt);
+            
+            // Show temporary feedback
+            const button = document.getElementById('copyPrompt');
+            const originalText = button.innerHTML;
+            button.innerHTML = '✅ Copied!';
+            setTimeout(() => {
+                button.innerHTML = originalText;
+            }, 1500);
+            
+        } else {
+            alert('Failed to get game metadata');
+        }
+    } catch (error) {
+        alert('Error copying prompt: ' + error.message);
+    }
+    hideContextMenu();
+}
 
 // Markdown rendering functions
 function unescapeJsonString(str) {
@@ -165,10 +240,17 @@ function renderGames() {
             <div class="game-title">${gameData.title}</div>
         `;
         
+        // Left click to launch game
         gameItem.addEventListener('click', (e) => {
             if (!e.target.classList.contains('delete-btn')) {
                 launchGame(gameId);
             }
+        });
+        
+        // Right click for context menu
+        gameItem.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showContextMenu(e.clientX, e.clientY, gameId);
         });
         
         grid.appendChild(gameItem);
@@ -397,6 +479,24 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             createGame();
+        }
+    });
+    
+    // Context menu event listeners
+    document.getElementById('openFile').addEventListener('click', openGameFile);
+    document.getElementById('copyPrompt').addEventListener('click', copyPrompt);
+    
+    // Hide context menu when clicking elsewhere
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#contextMenu')) {
+            hideContextMenu();
+        }
+    });
+    
+    // Hide context menu on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            hideContextMenu();
         }
     });
     

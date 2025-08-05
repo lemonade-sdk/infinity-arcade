@@ -427,6 +427,7 @@ Generate ONLY the Python code in a single code block. Do not include any explana
             GAME_METADATA[game_id] = {
                 "title": game_title,
                 "created": time.time(),
+                "prompt": prompt,
             }
             save_metadata()
             logger.debug(f"Saved metadata for game: {game_title}")
@@ -503,6 +504,43 @@ async def delete_game_endpoint(game_id: str):
     save_metadata()
 
     return JSONResponse({"success": True})
+
+
+@app.get("/api/game-metadata/{game_id}")
+async def get_game_metadata(game_id: str):
+    """Get metadata for a specific game."""
+    if game_id not in GAME_METADATA:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    return JSONResponse(GAME_METADATA[game_id])
+
+
+@app.post("/api/open-game-file/{game_id}")
+async def open_game_file(game_id: str):
+    """Open the Python file for a game in the default editor."""
+    if game_id not in GAME_METADATA:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    game_file = GAMES_DIR / f"{game_id}.py"
+    if not game_file.exists():
+        raise HTTPException(status_code=404, detail="Game file not found")
+
+    try:
+        import subprocess
+        import sys
+
+        # Try to open with the default program (works on Windows, macOS, Linux)
+        if sys.platform.startswith("win"):
+            subprocess.run(["start", str(game_file)], shell=True, check=True)
+        elif sys.platform.startswith("darwin"):  # macOS
+            subprocess.run(["open", str(game_file)], check=True)
+        else:  # Linux and others
+            subprocess.run(["xdg-open", str(game_file)], check=True)
+
+        return JSONResponse({"success": True, "message": "File opened"})
+    except Exception as e:
+        logger.error(f"Failed to open file {game_file}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")
 
 
 def main():
