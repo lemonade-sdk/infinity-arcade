@@ -257,7 +257,9 @@ async function deleteGame(gameId) {
             delete games[gameId];
             if (runningGameId === gameId) {
                 runningGameId = null;
-                // Hide spinner when running game is deleted
+                // Hide spinner when running game is deleted and reset create button
+                isGenerating = false;
+                document.getElementById('createBtn').disabled = false;
                 document.getElementById('gameSpinner').classList.remove('active');
                 document.getElementById('gamesGrid').style.display = 'grid';
             }
@@ -282,7 +284,9 @@ function startGameStatusCheck() {
             if (!data.running) {
                 runningGameId = null;
                 renderGames();
-                // Hide spinner when game finishes
+                // Hide spinner when game finishes and reset create button
+                isGenerating = false;
+                document.getElementById('createBtn').disabled = false;
                 document.getElementById('gameSpinner').classList.remove('active');
                 document.getElementById('gamesGrid').style.display = 'grid';
                 return;
@@ -291,7 +295,9 @@ function startGameStatusCheck() {
             // Game probably finished
             runningGameId = null;
             renderGames();
-            // Hide spinner when game finishes
+            // Hide spinner when game finishes and reset create button
+            isGenerating = false;
+            document.getElementById('createBtn').disabled = false;
             document.getElementById('gameSpinner').classList.remove('active');
             document.getElementById('gamesGrid').style.display = 'grid';
             return;
