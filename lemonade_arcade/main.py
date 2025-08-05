@@ -306,7 +306,10 @@ Generate ONLY the Python code in a single code block. Do not include any explana
                                     and len(chunk_data["choices"]) > 0
                                 ):
                                     delta = chunk_data["choices"][0].get("delta", {})
-                                    if "content" in delta:
+                                    if (
+                                        "content" in delta
+                                        and delta["content"] is not None
+                                    ):
                                         content = delta["content"]
                                         full_response += content
                                         logger.debug(
