@@ -2,6 +2,90 @@ let isGenerating = false;
 let games = {};
 let runningGameId = null;
 
+// Markdown rendering functions
+function unescapeJsonString(str) {
+    try {
+        return str.replace(/\\n/g, '\n')
+                 .replace(/\\\\/g, '\\');
+    } catch (error) {
+        console.error('Error unescaping string:', error);
+        return str;
+    }
+}
+
+function renderMarkdown(text) {
+    try {
+        // Clean up incomplete code blocks before rendering
+        let cleanedText = text;
+        
+        // Remove trailing incomplete code block markers
+        cleanedText = cleanedText.replace(/```\s*$/, '');
+        
+        // If there's an odd number of ``` markers, add a closing one
+        const codeBlockMarkers = (cleanedText.match(/```/g) || []).length;
+        if (codeBlockMarkers % 2 === 1) {
+            cleanedText += '\n```';
+        }
+        
+        const html = marked.parse(cleanedText);
+        return html;
+    } catch (error) {
+        console.error('Error rendering markdown:', error);
+        return text;
+    }
+}
+
+function setLLMOutput(text, isMarkdown = true) {
+    const outputElement = document.getElementById('llmOutput');
+    if (isMarkdown) {
+        // Add class for markdown styling
+        outputElement.classList.add('markdown-content');
+        
+        // Render as markdown
+        outputElement.innerHTML = renderMarkdown(text);
+        
+        // Remove empty code blocks
+        const emptyCodeBlocks = outputElement.querySelectorAll('pre');
+        emptyCodeBlocks.forEach(pre => {
+            const code = pre.querySelector('code');
+            if (code && code.textContent.trim() === '') {
+                pre.remove();
+            }
+        });
+        
+        // Add language attributes to code blocks for styling
+        const codeBlocks = outputElement.querySelectorAll('pre code');
+        codeBlocks.forEach(block => {
+            const pre = block.parentElement;
+            const codeText = block.textContent;
+            
+            // Check if this looks like Python code
+            if (codeText.includes('import ') || 
+                codeText.includes('def ') || 
+                codeText.includes('pygame') ||
+                codeText.includes('class ') ||
+                codeText.includes('if __name__') ||
+                codeText.match(/^\s*#.*$/m)) { // Python comments
+                pre.setAttribute('data-lang', 'python');
+                block.classList.add('language-python');
+            }
+        });
+        
+        // Re-render MathJax if present
+        if (window.MathJax && window.MathJax.typesetPromise) {
+            window.MathJax.typesetPromise([outputElement]).catch(console.error);
+        }
+    } else {
+        // Remove markdown class for plain text
+        outputElement.classList.remove('markdown-content');
+        // Set as plain text
+        outputElement.textContent = text;
+    }
+    
+    // Auto-scroll to bottom
+    outputElement.scrollTop = outputElement.scrollHeight;
+}
+
 // Check server status periodically
 async function checkServerStatus() {
     try {
@@ -107,7 +191,7 @@ async function createGame() {
     document.getElementById('createBtn').disabled = true;
     document.getElementById('gameSpinner').classList.add('active');
     document.getElementById('gamesGrid').style.display = 'none';
-    document.getElementById('llmOutput').textContent = '';
+    setLLMOutput('', false); // Clear output
     
     try {
         const response = await fetch('/api/create-game', {
@@ -143,8 +227,7 @@ async function createGame() {
                         const data = JSON.parse(line.slice(6));
                         if (data.type === 'content') {
                             fullResponse += data.content;
-                            document.getElementById('llmOutput').textContent = fullResponse;
-                            document.getElementById('llmOutput').scrollTop = document.getElementById('llmOutput').scrollHeight;
+                            setLLMOutput(fullResponse, true); // Render as markdown
                         } else if (data.type === 'status') {
                             document.getElementById('spinnerStatus').textContent = data.message;
                         } else if (data.type === 'complete') {
@@ -184,8 +267,7 @@ async function createGame() {
                             if (streamData.choices && streamData.choices[0] && streamData.choices[0].delta && streamData.choices[0].delta.content) {
                                 const content = streamData.choices[0].delta.content;
                                 fullResponse += content;
-                                document.getElementById('llmOutput').textContent = fullResponse;
-                                document.getElementById('llmOutput').scrollTop = document.getElementById('llmOutput').scrollHeight;
+                                setLLMOutput(fullResponse, true); // Render as markdown
                             }
                         } catch (e2) {
                             // Ignore JSON parse errors for partial chunks
@@ -195,7 +277,8 @@ async function createGame() {
             }
         }
     } catch (error) {
-        document.getElementById('llmOutput').innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+        const outputElement = document.getElementById('llmOutput');
+        outputElement.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
         // Hide spinner on error
         isGenerating = false;
         document.getElementById('createBtn').disabled = false;

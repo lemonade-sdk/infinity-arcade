@@ -233,8 +233,173 @@ body {
     overflow-y: auto;
     font-size: 0.9rem;
     line-height: 1.5;
-    white-space: pre-wrap;
     word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+/* Override white-space for rendered markdown content */
+.llm-output.markdown-content {
+    white-space: normal;
+}
+
+/* Markdown formatting styles */
+.llm-output h1, .llm-output h2, .llm-output h3, .llm-output h4, .llm-output h5, .llm-output h6 {
+    color: #00ffff;
+    margin: 15px 0 10px 0;
+    font-weight: bold;
+}
+
+.llm-output h1 { font-size: 1.5rem; }
+.llm-output h2 { font-size: 1.3rem; }
+.llm-output h3 { font-size: 1.1rem; }
+
+.llm-output p {
+    margin: 10px 0;
+    color: #00ff41;
+}
+
+.llm-output code {
+    background: #1a1a2e;
+    color: #ffff99;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.llm-output pre {
+    background: #0f0f23;
+    border: 2px solid #333;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 15px 0;
+    overflow-x: auto;
+    white-space: pre;
+    position: relative;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Custom horizontal scrollbar styling for code blocks */
+.llm-output pre::-webkit-scrollbar {
+    height: 8px;
+}
+
+.llm-output pre::-webkit-scrollbar-track {
+    background: #0f0f23;
+    border-radius: 4px;
+}
+
+.llm-output pre::-webkit-scrollbar-thumb {
+    background: linear-gradient(to right, #00ff41, #00cc33);
+    border-radius: 4px;
+    border: 1px solid #0a1a0a;
+}
+
+.llm-output pre::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to right, #33ff66, #00ff41);
+}
+
+.llm-output pre code {
+    background: none;
+    padding: 0;
+    color: #00ff41;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    font-family: 'Courier New', 'Lucida Console', monospace;
+    display: block;
+    white-space: pre;
+}
+
+/* Hide empty code blocks */
+.llm-output pre:empty,
+.llm-output pre code:empty {
+    display: none;
+}
+
+/* Enhanced Python syntax highlighting for code blocks */
+.llm-output pre code.language-python {
+    color: #00ff41;
+}
+
+.llm-output pre::before {
+    content: attr(data-lang);
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: linear-gradient(145deg, #00ff41, #00cc33);
+    color: #000;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+}
+
+.llm-output pre[data-lang="python"]::before {
+    content: "🐍 Python";
+}
+
+.llm-output ul, .llm-output ol {
+    margin: 10px 0;
+    padding-left: 20px;
+    color: #00ff41;
+}
+
+.llm-output li {
+    margin: 5px 0;
+}
+
+.llm-output blockquote {
+    border-left: 4px solid #00ff41;
+    margin: 15px 0;
+    padding: 10px 15px;
+    background: rgba(0, 255, 65, 0.1);
+    font-style: italic;
+}
+
+.llm-output strong {
+    color: #00ffff;
+    font-weight: bold;
+}
+
+.llm-output em {
+    color: #ffff99;
+    font-style: italic;
+}
+
+.llm-output a {
+    color: #00ffff;
+    text-decoration: underline;
+}
+
+.llm-output a:hover {
+    color: #33ffff;
+}
+
+.llm-output table {
+    border-collapse: collapse;
+    margin: 15px 0;
+    color: #00ff41;
+}
+
+.llm-output th, .llm-output td {
+    border: 1px solid #333;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.llm-output th {
+    background: #1a1a2e;
+    color: #00ffff;
+    font-weight: bold;
+}
+
+.llm-output hr {
+    border: none;
+    border-top: 2px solid #333;
+    margin: 20px 0;
 }
 
 /* Custom scrollbar styling for LLM output */
@@ -359,6 +524,15 @@ body {
     color: #ff4444;
     padding: 15px;
     margin: 10px 0;
+}
+
+.llm-output .error-message {
+    background: rgba(255, 68, 68, 0.2);
+    border: 1px solid #ff4444;
+    border-radius: 5px;
+    color: #ff4444;
+    padding: 10px;
+    margin: 0;
 }
 
 .get-lemonade-link {
