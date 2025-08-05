@@ -79,10 +79,24 @@ async def check_lemonade_server():
     """Check if Lemonade Server is running."""
     logger.debug(f"Checking Lemonade Server at {LEMONADE_SERVER_URL}")
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        # Use a longer timeout and retry logic for more robust checking
+        async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(f"{LEMONADE_SERVER_URL}/api/v1/models")
             logger.debug(f"Server check response status: {response.status_code}")
             return response.status_code == 200
+    except httpx.TimeoutException:
+        logger.debug("Server check timed out - server might be busy")
+        # Try a simpler health check endpoint if available
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    f"{LEMONADE_SERVER_URL}/health", follow_redirects=True
+                )
+                logger.debug(f"Health check response status: {response.status_code}")
+                return response.status_code == 200
+        except Exception as e:
+            logger.debug(f"Health check also failed: {e}")
+            return False
     except Exception as e:
         logger.debug(f"Server check failed: {e}")
         return False

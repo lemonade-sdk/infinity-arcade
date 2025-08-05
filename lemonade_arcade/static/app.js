@@ -2,6 +2,8 @@ let isGenerating = false;
 let games = {};
 let runningGameId = null;
 let selectedGameId = null;
+let lastServerStatusTime = 0;
+let isServerKnownOnline = false;
 
 // Context menu functionality
 function showContextMenu(x, y, gameId) {
@@ -162,9 +164,22 @@ function setLLMOutput(text, isMarkdown = true) {
 }
 
 // Check server status periodically
+// This function is more robust during LLM generation phases:
+// - Uses longer timeouts during generation
+// - Maintains "online" status during brief connection issues if server was recently working
+// - Only marks server as offline if it's been unreachable for a significant time during generation
 async function checkServerStatus() {
     try {
-        const response = await fetch('/api/server-status');
+        // During LLM generation, use a longer timeout and be more forgiving
+        const timeout = isGenerating ? 15000 : 8000;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        const response = await fetch('/api/server-status', {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
         const data = await response.json();
         const indicator = document.getElementById('statusIndicator');
         const statusText = document.getElementById('statusText');
@@ -172,15 +187,31 @@ async function checkServerStatus() {
         if (data.online) {
             indicator.className = 'status-indicator status-online';
             statusText.innerHTML = '🍋 Lemonade Server Online';
+            isServerKnownOnline = true;
+            lastServerStatusTime = Date.now();
         } else {
-            indicator.className = 'status-indicator status-offline';
-            statusText.innerHTML = `Server Offline - <a href="https://lemonade-server.ai" target="_blank" class="get-lemonade-link">Get Lemonade</a>`;
+            // Only show offline if we're not generating or if it's been offline for a while
+            if (!isGenerating || (Date.now() - lastServerStatusTime > 60000)) {
+                indicator.className = 'status-indicator status-offline';
+                statusText.innerHTML = `Server Offline - <a href="https://lemonade-server.ai" target="_blank" class="get-lemonade-link">Get Lemonade</a>`;
+                isServerKnownOnline = false;
+            }
+            // If generating and server was recently online, keep showing online status
         }
     } catch (error) {
         const indicator = document.getElementById('statusIndicator');
         const statusText = document.getElementById('statusText');
+        
+        // During generation, be more forgiving about timeouts
+        if (isGenerating && isServerKnownOnline && (Date.now() - lastServerStatusTime < 120000)) {
+            // Server was recently online and we're generating - probably just busy
+            console.log('Server check failed during generation, but keeping online status:', error.message);
+            return; // Don't change status
+        }
+        
         indicator.className = 'status-indicator status-offline';
         statusText.innerHTML = `Connection Error - <a href="https://lemonade-server.ai" target="_blank" class="get-lemonade-link">Get Lemonade</a>`;
+        isServerKnownOnline = false;
     }
 }
 
@@ -270,6 +301,9 @@ async function createGame() {
     }
     
     isGenerating = true;
+    isServerKnownOnline = true; // We're about to use the server, so it should be online
+    lastServerStatusTime = Date.now();
+    
     document.getElementById('createBtn').disabled = true;
     document.getElementById('gameSpinner').classList.add('active');
     document.getElementById('gamesGrid').style.display = 'none';
@@ -290,6 +324,14 @@ async function createGame() {
         if (!response.ok) {
             throw new Error('Failed to create game');
         }
+        
+        // Server responded successfully, update status immediately
+        isServerKnownOnline = true;
+        lastServerStatusTime = Date.now();
+        const indicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        indicator.className = 'status-indicator status-online';
+        statusText.innerHTML = '🍋 Lemonade Server Online';
         
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -505,6 +547,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadModels();
     loadGames();
     
-    // Check server status every 30 seconds
-    setInterval(checkServerStatus, 30000);
+    // Regular status checking - the checkServerStatus function itself handles
+    // different behavior during generation vs idle states
+    setInterval(checkServerStatus, 15000); // Check every 15 seconds
 });
