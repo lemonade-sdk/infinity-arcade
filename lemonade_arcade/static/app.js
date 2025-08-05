@@ -79,7 +79,6 @@ function renderGames() {
         gameItem.innerHTML = `
             <button class="delete-btn" onclick="deleteGame('${gameId}')">&times;</button>
             <div class="game-title">${gameData.title}</div>
-            <div class="game-description">${gameData.description}</div>
         `;
         
         gameItem.addEventListener('click', (e) => {

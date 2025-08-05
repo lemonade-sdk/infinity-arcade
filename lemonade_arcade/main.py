@@ -52,6 +52,16 @@ if METADATA_FILE.exists():
     try:
         with open(METADATA_FILE, "r") as f:
             GAME_METADATA = json.load(f)
+        # Clean up old metadata format - remove descriptions
+        updated = False
+        for game_id, game_data in GAME_METADATA.items():
+            if "description" in game_data:
+                del game_data["description"]
+                updated = True
+        # Save if we made changes
+        if updated:
+            with open(METADATA_FILE, "w") as f:
+                json.dump(GAME_METADATA, f, indent=2)
     except Exception:
         GAME_METADATA = {}
 
@@ -94,6 +104,63 @@ async def get_available_models():
     except Exception as e:
         logger.debug(f"Error getting models: {e}")
     return []
+
+
+async def generate_game_title(prompt: str, model: str) -> str:
+    """Generate a short title for the game based on the prompt."""
+    logger.debug(f"Generating title for prompt: {prompt[:50]}...")
+
+    try:
+        title_prompt = f"""Generate a short game title (2-3 words maximum) for this game concept: "{prompt}"
+
+Requirements:
+- EXACTLY 2-3 words only
+- Should be catchy and describe the game
+- No punctuation except spaces
+- Examples: "Snake Game", "Space Shooter", "Puzzle Master", "Racing Fun"
+
+Return ONLY the title, nothing else."""
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a game title generator. Return only the title, nothing else.",
+            },
+            {"role": "user", "content": title_prompt},
+        ]
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{LEMONADE_SERVER_URL}/api/v1/chat/completions",
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "stream": False,
+                    "max_tokens": 20,
+                    "temperature": 0.3,
+                },
+                headers={"Content-Type": "application/json"},
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if "choices" in data and len(data["choices"]) > 0:
+                    title = data["choices"][0]["message"]["content"].strip()
+                    # Clean up the title - remove quotes and extra text
+                    title = title.strip("\"'").split("\n")[0].strip()
+                    # Limit to 3 words max
+                    words = title.split()[:3]
+                    final_title = " ".join(words)
+                    logger.debug(f"Generated title: {final_title}")
+                    return final_title
+    except Exception as e:
+        logger.warning(f"Failed to generate title: {e}")
+
+    # Fallback to extracting from prompt
+    title_words = prompt.split()[:3]
+    fallback_title = " ".join(title_words).title()
+    logger.debug(f"Using fallback title: {fallback_title}")
+    return fallback_title
 
 
 def extract_python_code(llm_response: str) -> Optional[str]:
@@ -350,16 +417,15 @@ Generate ONLY the Python code in a single code block. Do not include any explana
                 f.write(python_code)
             logger.debug("Game file saved successfully")
 
-            # Extract title from prompt (first few words)
-            title_words = prompt.split()[:4]
-            game_title = " ".join(title_words).title()
-            if len(prompt.split()) > 4:
-                game_title += "..."
+            # Generate a proper title for the game
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Creating title...'})}\n\n"
+            logger.debug("Generating game title")
+
+            game_title = await generate_game_title(prompt, model)
 
             # Save metadata
             GAME_METADATA[game_id] = {
                 "title": game_title,
-                "description": prompt[:100] + ("..." if len(prompt) > 100 else ""),
                 "created": time.time(),
             }
             save_metadata()
