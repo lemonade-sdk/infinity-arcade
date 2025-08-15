@@ -17,10 +17,18 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# Pygame will be imported on-demand to avoid early DLL loading issues
+pygame = None
+
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    StreamingResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -28,11 +36,21 @@ from fastapi.templating import Jinja2Templates
 logger = logging.getLogger("lemonade_arcade.main")
 
 
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
 app = FastAPI(title="Lemonade Arcade", version="0.1.0")
 
 # Set up static files and templates
-STATIC_DIR = Path(__file__).parent / "static"
-TEMPLATES_DIR = Path(__file__).parent / "templates"
+STATIC_DIR = get_resource_path("lemonade_arcade/static")
+TEMPLATES_DIR = get_resource_path("lemonade_arcade/templates")
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -223,8 +241,18 @@ def launch_game(game_id: str):
 
     # Launch the game
     try:
-        logger.debug(f"Launching Python process: {sys.executable} {game_file}")
-        process = subprocess.Popen([sys.executable, str(game_file)])
+        # In PyInstaller environment, use the same executable with the game file as argument
+        # This ensures the game runs with the same DLL configuration
+        if getattr(sys, "frozen", False):
+            # We're in PyInstaller - use the same executable that has the SDL2 DLLs
+            cmd = [sys.executable, str(game_file)]
+            logger.debug(f"PyInstaller mode - Launching: {' '.join(cmd)}")
+        else:
+            # Development mode - use regular Python
+            cmd = [sys.executable, str(game_file)]
+            logger.debug(f"Development mode - Launching: {' '.join(cmd)}")
+
+        process = subprocess.Popen(cmd)
         RUNNING_GAMES[game_id] = process
         logger.debug(f"Game {game_id} launched successfully with PID {process.pid}")
         return True
@@ -265,6 +293,12 @@ def cleanup_finished_games():
 async def root(request: Request):
     """Serve the main HTML page."""
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Redirect to favicon in static directory."""
+    return RedirectResponse(url="/static/favicon.ico")
 
 
 @app.get("/api/server-status")
@@ -557,22 +591,71 @@ async def open_game_file(game_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")
 
 
+def run_game_file(game_file_path):
+    """Run a game file directly - used when executable is called with a game file."""
+    try:
+        print(f"Lemonade Arcade - Running game: {game_file_path}")
+
+        # Import pygame here, right before we need it
+        global pygame
+        if pygame is None:
+            try:
+                import pygame
+
+                print(f"Pygame {pygame.version.ver} loaded successfully")
+            except ImportError as e:
+                print(f"Error: Failed to import pygame: {e}")
+                sys.exit(1)
+
+        # Read and execute the game file
+        with open(game_file_path, "r", encoding="utf-8") as f:
+            game_code = f.read()
+
+        # Execute the game code - pygame should now be available
+        exec(game_code, {"__name__": "__main__", "__file__": game_file_path})
+
+    except Exception as e:
+        print(f"Error running game {game_file_path}: {e}")
+        import traceback
+
+        traceback.print_exc()
+        sys.exit(1)
+
+
 def main():
     """Main entry point for the application."""
+    # Check if we're being called to run a specific game file
+    if len(sys.argv) == 2 and sys.argv[1].endswith(".py"):
+        # Game mode: run the specified game file
+        run_game_file(sys.argv[1])
+        return
+
+    # Server mode: start the Lemonade Arcade server
     import webbrowser
     import threading
+
+    # Keep console visible for debugging and control
+    print("Starting Lemonade Arcade...")
+    print("Press Ctrl+C to quit")
 
     port = 8080
 
     # Start the server in a separate thread
     def run_server():
-        uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+        print(f"Starting Lemonade Arcade server on http://127.0.0.1:{port}")
+        try:
+            uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+        except Exception as e:
+            print(f"Error starting server: {e}")
 
+    print("Launching server thread...")
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
     # Wait a moment then open browser
-    time.sleep(2)
+    print("Waiting for server to start...")
+    time.sleep(3)
+    print(f"Opening browser to http://127.0.0.1:{port}")
     webbrowser.open(f"http://127.0.0.1:{port}")
 
     try:

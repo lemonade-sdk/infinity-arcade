@@ -20,6 +20,9 @@ setup(
         "console_scripts": [
             "lemonade-arcade=lemonade_arcade.cli:main",
         ],
+        "gui_scripts": [
+            "lemonade-arcade-gui=lemonade_arcade.main:main",
+        ],
     },
     python_requires=">=3.8",
     classifiers=[
