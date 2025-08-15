@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to verify the MSIX build process works
+Test script to verify the executable build process works
 """
 
 import subprocess
@@ -49,23 +49,6 @@ def test_build_tools():
         print("  ✗ PyInstaller (install with: pip install pyinstaller)")
         return False
 
-    # Test Windows SDK (makeappx.exe)
-    makeappx_paths = [
-        r"C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\makeappx.exe",
-        r"C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\makeappx.exe",
-    ]
-
-    found_makeappx = False
-    for path in makeappx_paths:
-        if Path(path).exists():
-            print(f"  ✓ makeappx.exe ({path})")
-            found_makeappx = True
-            break
-
-    if not found_makeappx:
-        print("  ✗ makeappx.exe (install Windows 10 SDK)")
-        return False
-
     return True
 
 
@@ -76,9 +59,7 @@ def test_files():
     required_files = [
         "setup.py",
         "lemonade_arcade.spec",
-        "build_msix.py",
-        "build_msix.ps1",
-        "msix/Package.appxmanifest",
+        "build_exe.ps1",
         "lemonade_arcade/__init__.py",
         "lemonade_arcade/main.py",
         "lemonade_arcade/cli.py",
@@ -96,8 +77,8 @@ def test_files():
 
 def main():
     """Run all tests."""
-    print("Lemonade Arcade MSIX Build Test")
-    print("=" * 35)
+    print("Lemonade Arcade Executable Build Test")
+    print("=" * 38)
 
     success = True
 
@@ -105,12 +86,12 @@ def main():
     success &= test_build_tools()
     success &= test_files()
 
-    print("\n" + "=" * 35)
+    print("\n" + "=" * 38)
     if success:
-        print("✓ All tests passed! Ready to build MSIX installer.")
-        print("\nTo build the installer, run:")
-        print("  PowerShell: .\\build_msix.ps1")
-        print("  Python:     python build_msix.py")
+        print("✓ All tests passed! Ready to build executable.")
+        print("\nTo build the executable, run:")
+        print("  PowerShell: .\\build_exe.ps1")
+        print("  Python:     python -m PyInstaller lemonade_arcade.spec")
     else:
         print("✗ Some tests failed. Please fix the issues above.")
         return 1
