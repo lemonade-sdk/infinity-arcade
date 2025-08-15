@@ -17,6 +17,9 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# Pygame will be imported on-demand to avoid early DLL loading issues
+pygame = None
+
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
@@ -238,8 +241,18 @@ def launch_game(game_id: str):
 
     # Launch the game
     try:
-        logger.debug(f"Launching Python process: {sys.executable} {game_file}")
-        process = subprocess.Popen([sys.executable, str(game_file)])
+        # In PyInstaller environment, use the same executable with the game file as argument
+        # This ensures the game runs with the same DLL configuration
+        if getattr(sys, "frozen", False):
+            # We're in PyInstaller - use the same executable that has the SDL2 DLLs
+            cmd = [sys.executable, str(game_file)]
+            logger.debug(f"PyInstaller mode - Launching: {' '.join(cmd)}")
+        else:
+            # Development mode - use regular Python
+            cmd = [sys.executable, str(game_file)]
+            logger.debug(f"Development mode - Launching: {' '.join(cmd)}")
+
+        process = subprocess.Popen(cmd)
         RUNNING_GAMES[game_id] = process
         logger.debug(f"Game {game_id} launched successfully with PID {process.pid}")
         return True
@@ -578,8 +591,46 @@ async def open_game_file(game_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")
 
 
+def run_game_file(game_file_path):
+    """Run a game file directly - used when executable is called with a game file."""
+    try:
+        print(f"Lemonade Arcade - Running game: {game_file_path}")
+
+        # Import pygame here, right before we need it
+        global pygame
+        if pygame is None:
+            try:
+                import pygame
+
+                print(f"Pygame {pygame.version.ver} loaded successfully")
+            except ImportError as e:
+                print(f"Error: Failed to import pygame: {e}")
+                sys.exit(1)
+
+        # Read and execute the game file
+        with open(game_file_path, "r", encoding="utf-8") as f:
+            game_code = f.read()
+
+        # Execute the game code - pygame should now be available
+        exec(game_code, {"__name__": "__main__", "__file__": game_file_path})
+
+    except Exception as e:
+        print(f"Error running game {game_file_path}: {e}")
+        import traceback
+
+        traceback.print_exc()
+        sys.exit(1)
+
+
 def main():
     """Main entry point for the application."""
+    # Check if we're being called to run a specific game file
+    if len(sys.argv) == 2 and sys.argv[1].endswith(".py"):
+        # Game mode: run the specified game file
+        run_game_file(sys.argv[1])
+        return
+
+    # Server mode: start the Lemonade Arcade server
     import webbrowser
     import threading
 
