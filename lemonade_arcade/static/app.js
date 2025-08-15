@@ -103,7 +103,7 @@ class SetupManager {
         console.log('Setup completed! Showing main interface...');
         setupComplete = true;
         
-        // Hide setup screen
+        // Hide setup screen and built-in games section
         const setupScreen = document.getElementById('setupScreen');
         const gameInterface = document.getElementById('gameInterface');
         const inputArea = document.getElementById('inputArea');
@@ -111,6 +111,9 @@ class SetupManager {
         if (setupScreen) setupScreen.style.display = 'none';
         if (gameInterface) gameInterface.style.display = 'block';
         if (inputArea) inputArea.style.display = 'flex';
+        
+        // Make sure built-in games section is hidden when entering main interface
+        this.hideBuiltinGamesSection();
         
         // Load the main interface data
         checkServerStatus();
@@ -133,11 +136,12 @@ class SetupManager {
             loaded: { completed: false, inProgress: false }
         };
         
-        // Hide buttons
+        // Hide buttons and built-in games section
         const letsGoBtn = document.getElementById('letsGoBtn');
         const retryBtn = document.getElementById('retryBtn');
         if (letsGoBtn) letsGoBtn.style.display = 'none';
         if (retryBtn) retryBtn.style.display = 'none';
+        this.hideBuiltinGamesSection();
         
         this.updateProgress();
         
@@ -159,13 +163,11 @@ class SetupManager {
             await this.checkModel();
         }
         
-        // Check 5: Model Loading (only if model is installed)
-        if (this.checks.model.completed) {
-            await this.checkModelLoaded();
-        }
+        // Note: checkModelLoaded() is called automatically by checkModel() when model is installed
+        // or by installModel() after successful installation
         
         // If not all checks passed, show retry button
-        if (!this.checks.installed.completed || !this.checks.running.completed || !this.checks.connection.completed || !this.checks.model.completed) {
+        if (!this.checks.installed.completed || !this.checks.running.completed || !this.checks.connection.completed || !this.checks.model.completed || !this.checks.loaded.completed) {
             this.showRetryButton();
         }
         
@@ -365,10 +367,9 @@ class SetupManager {
                     this.checkModelLoaded();
                 }, 1000);
             } else {
-                this.updateCheckStatus('model', 'pending', 
-                    `${status.model_name} needs to be loaded. Loading automatically...`);
-                // Automatically install the model instead of asking the user
-                await this.installModel();
+                this.updateCheckStatus('model', 'error', 
+                    `${status.model_name} needs to be installed (18.6 GB download)`,
+                    true, 'Install Model (18.6 GB)', () => this.installModel());
             }
         } catch (error) {
             console.error('Model check failed:', error);
@@ -390,6 +391,9 @@ class SetupManager {
         
         this.updateCheckStatus('model', 'pending', 'Installing required model (18.6 GB - this may take several minutes)...');
         
+        // Always show built-in games section during download, regardless of how installModel was called
+        this.showBuiltinGamesSection();
+        
         try {
             // Use a very long timeout for model installation (30 minutes)
             const controller = new AbortController();
@@ -406,6 +410,9 @@ class SetupManager {
             if (result.success) {
                 this.updateCheckStatus('model', 'success', 'Required model installed successfully!');
                 
+                // Hide built-in games section when download completes
+                this.hideBuiltinGamesSection();
+                
                 // Automatically proceed to loading the model
                 setTimeout(() => {
                     this.checkModelLoaded();
@@ -413,13 +420,25 @@ class SetupManager {
             } else {
                 this.updateCheckStatus('model', 'error', 
                     `Model installation failed: ${result.message}`,
-                    true, 'Retry Install\n(18.6 GB)', () => this.installModel());
+                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+                
+                // Hide built-in games section on error
+                this.hideBuiltinGamesSection();
             }
         } catch (error) {
             console.error('Model installation failed:', error);
-            this.updateCheckStatus('model', 'error', 
-                'Model installation failed due to network error',
-                true, 'Retry Install\n(18.6 GB)', () => this.installModel());
+            if (error.name === 'AbortError') {
+                this.updateCheckStatus('model', 'error', 
+                    'Model installation timed out after 30 minutes',
+                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+            } else {
+                this.updateCheckStatus('model', 'error', 
+                    'Model installation failed due to network error',
+                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+            }
+            
+            // Hide built-in games section on error
+            this.hideBuiltinGamesSection();
         }
     }
 
@@ -487,6 +506,90 @@ class SetupManager {
             this.updateCheckStatus('loaded', 'error', 
                 'Model loading failed due to network error',
                 true, 'Retry Load', () => this.loadModel());
+        }
+    }
+    
+    showBuiltinGamesSection() {
+        const builtinGamesSection = document.getElementById('builtinGamesSection');
+        if (builtinGamesSection) {
+            builtinGamesSection.style.display = 'block';
+            this.loadBuiltinGames();
+        }
+    }
+    
+    hideBuiltinGamesSection() {
+        const builtinGamesSection = document.getElementById('builtinGamesSection');
+        if (builtinGamesSection) {
+            builtinGamesSection.style.display = 'none';
+        }
+    }
+    
+    async loadBuiltinGames() {
+        const builtinGamesGrid = document.getElementById('builtinGamesGrid');
+        if (!builtinGamesGrid) return;
+        
+        try {
+            // Fetch the built-in games from the server
+            const response = await fetch('/api/games');
+            const allGames = await response.json();
+            
+            // Filter for built-in games only
+            const builtinGames = Object.entries(allGames).filter(([gameId, gameData]) => 
+                gameData.builtin || gameId.startsWith('builtin_')
+            );
+            
+            if (builtinGames.length === 0) {
+                builtinGamesGrid.innerHTML = '<div class="no-builtin-games">No built-in games available</div>';
+                return;
+            }
+            
+            builtinGamesGrid.innerHTML = '';
+            
+            builtinGames.forEach(([gameId, gameData]) => {
+                const gameItem = document.createElement('div');
+                gameItem.className = 'builtin-game-item';
+                
+                gameItem.innerHTML = `
+                    <div class="builtin-game-icon">🎮</div>
+                    <div class="builtin-game-title">${gameData.title}</div>
+                    <div class="builtin-game-description">${gameData.prompt}</div>
+                `;
+                
+                // Click to launch the built-in game
+                gameItem.addEventListener('click', () => {
+                    this.launchBuiltinGame(gameId);
+                });
+                
+                builtinGamesGrid.appendChild(gameItem);
+            });
+        } catch (error) {
+            console.error('Failed to load built-in games:', error);
+            builtinGamesGrid.innerHTML = '<div class="builtin-games-error">Failed to load built-in games</div>';
+        }
+    }
+    
+    async launchBuiltinGame(gameId) {
+        try {
+            // Launch the built-in game using the correct endpoint with game_id as path parameter
+            const response = await fetch(`/api/launch-game/${gameId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log(`Built-in game ${gameId} launched successfully`);
+                // You could show a message or update UI to indicate the game is running
+            } else {
+                console.error(`Failed to launch built-in game: ${result.message}`);
+                alert(`Failed to launch game: ${result.message}`);
+            }
+        } catch (error) {
+            console.error('Error launching built-in game:', error);
+            alert('Failed to launch game due to network error');
         }
     }
 }
