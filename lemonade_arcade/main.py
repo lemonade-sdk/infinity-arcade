@@ -28,11 +28,21 @@ from fastapi.templating import Jinja2Templates
 logger = logging.getLogger("lemonade_arcade.main")
 
 
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
 app = FastAPI(title="Lemonade Arcade", version="0.1.0")
 
 # Set up static files and templates
-STATIC_DIR = Path(__file__).parent / "static"
-TEMPLATES_DIR = Path(__file__).parent / "templates"
+STATIC_DIR = get_resource_path("lemonade_arcade/static")
+TEMPLATES_DIR = get_resource_path("lemonade_arcade/templates")
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -563,7 +573,7 @@ def main():
     import threading
 
     # Hide console window on Windows for GUI mode
-    if sys.platform == "win32" and not sys.stdout.isatty():
+    if sys.platform == "win32" and (sys.stdout is None or not sys.stdout.isatty()):
         try:
             import ctypes
 
