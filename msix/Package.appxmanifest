@@ -2,7 +2,8 @@
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
-         xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10">
+         xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
 
   <Identity Name="LemonadeSDK.LemonadeArcade"
             Publisher="CN=Lemonade SDK"
@@ -46,6 +47,7 @@
   <Capabilities>
     <Capability Name="internetClient" />
     <Capability Name="privateNetworkClientServer" />
+    <rescap:Capability Name="runFullTrust" />
   </Capabilities>
 
 </Package>

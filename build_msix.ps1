@@ -90,7 +90,7 @@ New-Item -ItemType Directory -Path $StagingDir | Out-Null
 Copy-Item "dist\LemonadeArcade.exe" "$StagingDir\LemonadeArcade.exe"
 
 # Copy manifest
-Copy-Item "msix\Package.appxmanifest" "$StagingDir\Package.appxmanifest"
+Copy-Item "msix\Package.appxmanifest" "$StagingDir\AppxManifest.xml"
 
 # Create Assets directory and copy assets
 New-Item -ItemType Directory -Path "$StagingDir\Assets" | Out-Null
@@ -128,7 +128,13 @@ if (-not (Test-Path $OutputDir)) {
 $OutputMsix = "$OutputDir\LemonadeArcade.msix"
 Write-Host "Creating MSIX package: $OutputMsix" -ForegroundColor Cyan
 
-Invoke-Command-Safe "`"$MakeAppX`" pack /d `"$StagingDir`" /p `"$OutputMsix`"" "Failed to create MSIX package"
+Write-Host "Running: `"$MakeAppX`" pack /d `"$StagingDir`" /p `"$OutputMsix`"" -ForegroundColor Yellow
+& $MakeAppX pack /d $StagingDir /p $OutputMsix
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to create MSIX package"
+    exit 1
+}
 
 # Clean up staging directory
 Remove-Item -Recurse -Force $StagingDir

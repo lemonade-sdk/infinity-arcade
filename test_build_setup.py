@@ -20,16 +20,11 @@ def test_dependencies():
         "pygame",
         "httpx",
         "jinja2",
-        "PIL",
     ]
 
     for module in required_modules:
         try:
-            if module == "PIL":
-                # PIL is imported as PIL but package is pillow
-                from PIL import Image
-            else:
-                __import__(module)
+            __import__(module)
             print(f"  ✓ {module}")
         except ImportError:
             print(f"  ✗ {module} (missing)")

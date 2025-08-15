@@ -46,29 +46,6 @@ jobs:
         python -m pip install -e .
         python -m pip install pyinstaller
     
-    - name: Create application icon
-      run: |
-        # Create a simple icon using Python PIL
-        python -c "
-        from PIL import Image, ImageDraw
-        import os
-        
-        # Create icon directory
-        os.makedirs('assets', exist_ok=True)
-        
-        # Create a simple icon
-        img = Image.new('RGBA', (256, 256), (255, 215, 0, 255))  # Gold background
-        draw = ImageDraw.Draw(img)
-        
-        # Draw a simple 'L' shape for Lemonade
-        draw.rectangle([50, 50, 90, 206], fill=(255, 255, 255, 255))  # Vertical line
-        draw.rectangle([50, 166, 150, 206], fill=(255, 255, 255, 255))  # Horizontal line
-        
-        # Save as ICO
-        img.save('assets/icon.ico', format='ICO', sizes=[(16,16), (32,32), (48,48), (256,256)])
-        "
-      shell: pwsh
-      
     - name: Create MSIX assets
       run: |
         # Create MSIX assets using Python PIL

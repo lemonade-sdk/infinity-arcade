@@ -15,7 +15,6 @@ setup(
         "httpx>=0.25.0",
         "jinja2>=3.1.0",
         "python-multipart>=0.0.6",
-        "pillow>=9.0.0",  # For icon generation
     ],
     entry_points={
         "console_scripts": [
