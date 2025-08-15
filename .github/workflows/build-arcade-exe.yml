@@ -1,0 +1,85 @@
+name: Build Lemonade Arcade Executable
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**'
+      - '.github/workflows/build-arcade-exe.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 0.1.0)'
+        required: false
+        default: '0.1.0'
+
+jobs:
+  build-executable:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -e .
+        python -m pip install pyinstaller
+      
+    - name: Build executable with PyInstaller
+      run: |
+        python -m PyInstaller lemonade_arcade.spec
+      shell: pwsh
+      
+    - name: Verify build outputs
+      run: |
+        if (-not (Test-Path "dist\LemonadeArcade.exe")) {
+          Write-Error "Executable not found"
+          exit 1
+        }
+        
+        # Show file information
+        $exe = Get-Item "dist\LemonadeArcade.exe"
+        
+        Write-Host "Build artifact:"
+        Write-Host "  - Executable: $($exe.Name) ($([math]::Round($exe.Length / 1MB, 2)) MB)"
+        Write-Host "  - Location: $($exe.FullName)"
+      shell: pwsh
+      
+    - name: Upload executable artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: lemonade-arcade-exe
+        path: dist/LemonadeArcade.exe
+        retention-days: 30
+        
+    - name: Upload to release (if release)
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: dist/LemonadeArcade.exe
+        asset_name: LemonadeArcade-${{ github.event.release.tag_name }}.exe
+        asset_content_type: application/octet-stream

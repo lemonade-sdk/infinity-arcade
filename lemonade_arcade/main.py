@@ -20,7 +20,12 @@ from typing import Dict, List, Optional
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    StreamingResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -275,6 +280,12 @@ def cleanup_finished_games():
 async def root(request: Request):
     """Serve the main HTML page."""
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Redirect to favicon in static directory."""
+    return RedirectResponse(url="/static/favicon.ico")
 
 
 @app.get("/api/server-status")
