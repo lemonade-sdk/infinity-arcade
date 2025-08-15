@@ -13,9 +13,11 @@ class SetupManager {
         this.checks = {
             installed: { completed: false, inProgress: false },
             running: { completed: false, inProgress: false },
-            connection: { completed: false, inProgress: false }
+            connection: { completed: false, inProgress: false },
+            model: { completed: false, inProgress: false },
+            loaded: { completed: false, inProgress: false }
         };
-        this.totalChecks = 3;
+        this.totalChecks = 5; // Updated to include model installation and loading
     }
 
     updateProgress() {
@@ -32,7 +34,8 @@ class SetupManager {
         if (progressText) {
             if (completed === this.totalChecks) {
                 progressText.textContent = 'Setup complete! >>> READY TO LAUNCH <<<';
-                this.showLetsGoButton();
+                // Auto-complete setup instead of showing Let's Go button
+                setTimeout(() => this.completeSetup(), 1000);
             } else {
                 progressText.textContent = `${completed}/${this.totalChecks} checks completed`;
             }
@@ -55,7 +58,7 @@ class SetupManager {
                 this.checks[checkName].completed = true;
                 this.checks[checkName].inProgress = false;
             } else if (status === 'error') {
-                icon.textContent = '[ERR]';
+                icon.textContent = '[REQ]';
                 icon.classList.add('error');
                 this.checks[checkName].completed = false;
                 this.checks[checkName].inProgress = false;
@@ -125,7 +128,9 @@ class SetupManager {
         this.checks = {
             installed: { completed: false, inProgress: false },
             running: { completed: false, inProgress: false },
-            connection: { completed: false, inProgress: false }
+            connection: { completed: false, inProgress: false },
+            model: { completed: false, inProgress: false },
+            loaded: { completed: false, inProgress: false }
         };
         
         // Hide buttons
@@ -149,8 +154,18 @@ class SetupManager {
             await this.checkConnection();
         }
         
+        // Check 4: Model Installation (only if API connected)
+        if (this.checks.connection.completed) {
+            await this.checkModel();
+        }
+        
+        // Check 5: Model Loading (only if model is installed)
+        if (this.checks.model.completed) {
+            await this.checkModelLoaded();
+        }
+        
         // If not all checks passed, show retry button
-        if (!this.checks.installed.completed || !this.checks.running.completed || !this.checks.connection.completed) {
+        if (!this.checks.installed.completed || !this.checks.running.completed || !this.checks.connection.completed || !this.checks.model.completed) {
             this.showRetryButton();
         }
         
@@ -217,6 +232,11 @@ class SetupManager {
             
             if (status.api_online) {
                 this.updateCheckStatus('connection', 'success', 'Successfully connected to Lemonade Server API');
+                
+                // Automatically proceed to checking the model
+                setTimeout(() => {
+                    this.checkModel();
+                }, 1000);
             } else {
                 this.updateCheckStatus('connection', 'error', 
                     'Cannot connect to Lemonade Server API',
@@ -296,7 +316,7 @@ class SetupManager {
 
     async waitForServerReady() {
         let attempts = 0;
-        const maxAttempts = 15; // 30 seconds total
+        const maxAttempts = 60; // 120 seconds total (2 minutes)
         
         while (attempts < maxAttempts) {
             await new Promise(resolve => setTimeout(resolve, 2000));
@@ -324,6 +344,150 @@ class SetupManager {
         this.updateCheckStatus('running', 'error', 
             'Server started but is taking too long to respond',
             true, 'Check Again', () => this.checkServerRunning());
+    }
+
+    async checkModel() {
+        if (this.checks.model.inProgress) return;
+        this.checks.model.inProgress = true;
+        
+        this.updateCheckStatus('model', 'pending', 'Checking for required model...');
+        
+        try {
+            const response = await fetch('/api/setup-status');
+            const status = await response.json();
+            
+            if (status.model_installed) {
+                this.updateCheckStatus('model', 'success', 
+                    `Required model ${status.model_name} is installed`);
+                
+                // Automatically proceed to checking if the model is loaded
+                setTimeout(() => {
+                    this.checkModelLoaded();
+                }, 1000);
+            } else {
+                this.updateCheckStatus('model', 'pending', 
+                    `${status.model_name} needs to be loaded. Loading automatically...`);
+                // Automatically install the model instead of asking the user
+                await this.installModel();
+            }
+        } catch (error) {
+            console.error('Model check failed:', error);
+            this.updateCheckStatus('model', 'error', 
+                'Failed to check model status',
+                true, 'Retry Check', () => this.checkModel());
+        }
+        
+        this.checks.model.inProgress = false;
+        this.updateProgress();
+    }
+
+    async installModel() {
+        const btn = document.getElementById('btnModel');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Installing...';
+        }
+        
+        this.updateCheckStatus('model', 'pending', 'Installing required model (18.6 GB - this may take several minutes)...');
+        
+        try {
+            // Use a very long timeout for model installation (30 minutes)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 1800000); // 30 minutes
+            
+            const response = await fetch('/api/install-model', { 
+                method: 'POST',
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.updateCheckStatus('model', 'success', 'Required model installed successfully!');
+                
+                // Automatically proceed to loading the model
+                setTimeout(() => {
+                    this.checkModelLoaded();
+                }, 2000);
+            } else {
+                this.updateCheckStatus('model', 'error', 
+                    `Model installation failed: ${result.message}`,
+                    true, 'Retry Install\n(18.6 GB)', () => this.installModel());
+            }
+        } catch (error) {
+            console.error('Model installation failed:', error);
+            this.updateCheckStatus('model', 'error', 
+                'Model installation failed due to network error',
+                true, 'Retry Install\n(18.6 GB)', () => this.installModel());
+        }
+    }
+
+    async checkModelLoaded() {
+        if (this.checks.loaded.inProgress) return;
+        this.checks.loaded.inProgress = true;
+        
+        this.updateCheckStatus('loaded', 'pending', 'Checking if model is loaded...');
+        
+        try {
+            const response = await fetch('/api/setup-status');
+            const status = await response.json();
+            
+            if (status.model_loaded) {
+                this.updateCheckStatus('loaded', 'success', 
+                    `Model ${status.model_name} is loaded and ready`);
+            } else {
+                this.updateCheckStatus('loaded', 'pending', 
+                    `Model ${status.model_name} is not loaded. Loading automatically...`);
+                // Automatically load the model instead of asking the user
+                await this.loadModel();
+            }
+        } catch (error) {
+            console.error('Model load check failed:', error);
+            this.updateCheckStatus('loaded', 'error', 
+                'Failed to check if model is loaded',
+                true, 'Retry Check', () => this.checkModelLoaded());
+        }
+        
+        this.checks.loaded.inProgress = false;
+        this.updateProgress();
+    }
+
+    async loadModel() {
+        const btn = document.getElementById('btnLoaded');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Loading...';
+        }
+        
+        this.updateCheckStatus('loaded', 'pending', 'Loading model into memory...');
+        
+        try {
+            // Use a long timeout for model loading (10 minutes)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutes
+            
+            const response = await fetch('/api/load-model', { 
+                method: 'POST',
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.updateCheckStatus('loaded', 'success', 'Model loaded successfully and ready to use!');
+            } else {
+                this.updateCheckStatus('loaded', 'error', 
+                    `Model loading failed: ${result.message}`,
+                    true, 'Retry Load', () => this.loadModel());
+            }
+        } catch (error) {
+            console.error('Model loading failed:', error);
+            this.updateCheckStatus('loaded', 'error', 
+                'Model loading failed due to network error',
+                true, 'Retry Load', () => this.loadModel());
+        }
     }
 }
 
@@ -502,7 +666,8 @@ function setLLMOutput(text, isMarkdown = true) {
 async function checkServerStatus() {
     try {
         // During LLM generation, use a longer timeout and be more forgiving
-        const timeout = isGenerating ? 15000 : 8000;
+        // Increased timeouts to handle slow server loading
+        const timeout = isGenerating ? 60000 : 30000;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
         
@@ -553,19 +718,17 @@ async function loadModels() {
         const models = await response.json();
         const select = document.getElementById('modelSelect');
         
-        select.innerHTML = '';
-        if (models.length === 0) {
-            select.innerHTML = '<option>No models available</option>';
-        } else {
-            models.forEach(model => {
-                const option = document.createElement('option');
-                option.value = model;
-                option.textContent = model;
-                select.appendChild(option);
-            });
-        }
+        // Hide the model selector since we're using a fixed model
+        select.style.display = 'none';
+        
+        // Set the required model as selected (for any code that might still read it)
+        const requiredModel = "Qwen3-Coder-30B-A3B-Instruct-GGUF";
+        select.innerHTML = `<option value="${requiredModel}" selected>${requiredModel}</option>`;
+        
     } catch (error) {
-        document.getElementById('modelSelect').innerHTML = '<option>Error loading models</option>';
+        const select = document.getElementById('modelSelect');
+        select.style.display = 'none';
+        select.innerHTML = '<option>Error loading models</option>';
     }
 }
 
@@ -622,7 +785,7 @@ function renderGames() {
 // Create a new game
 async function createGame() {
     const prompt = document.getElementById('promptInput').value.trim();
-    const model = document.getElementById('modelSelect').value;
+    const model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"; // Use the required model directly
     
     if (!prompt || isGenerating) return;
     

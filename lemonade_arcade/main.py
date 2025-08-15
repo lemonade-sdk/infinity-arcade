@@ -393,6 +393,129 @@ async def get_available_models():
     return []
 
 
+async def check_required_model():
+    """Check if the required model is installed."""
+    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
+    logger.info(f"Checking for required model: {required_model}")
+
+    try:
+        models = await get_available_models()
+        is_installed = required_model in models
+        logger.info(f"Required model installed: {is_installed}")
+        return {"installed": is_installed, "model_name": required_model}
+    except Exception as e:
+        logger.error(f"Error checking required model: {e}")
+        return {"installed": False, "model_name": required_model}
+
+
+async def check_model_loaded():
+    """Check if the required model is currently loaded."""
+    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
+    logger.info(f"Checking if model is loaded: {required_model}")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(f"{LEMONADE_SERVER_URL}/api/v1/health")
+
+            if response.status_code == 200:
+                status_data = response.json()
+                # Check if the required model is the currently loaded model
+                loaded_model = status_data.get("model_loaded", "")
+                is_loaded = loaded_model == required_model
+                logger.info(
+                    f"Model loaded status: {is_loaded}, current model: {loaded_model}"
+                )
+                return {
+                    "loaded": is_loaded,
+                    "model_name": required_model,
+                    "current_model": loaded_model,
+                }
+            else:
+                logger.warning(
+                    f"Failed to get server status: HTTP {response.status_code}"
+                )
+                return {
+                    "loaded": False,
+                    "model_name": required_model,
+                    "current_model": None,
+                }
+    except Exception as e:
+        logger.error(f"Error checking model loaded status: {e}")
+        return {"loaded": False, "model_name": required_model, "current_model": None}
+
+
+async def install_required_model():
+    """Install the required model using the pull endpoint."""
+    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
+    logger.info(f"Installing required model: {required_model}")
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=600.0
+        ) as client:  # 10 minute timeout for model download
+            response = await client.post(
+                f"{LEMONADE_SERVER_URL}/api/v1/pull",
+                json={"model_name": required_model},
+                headers={"Content-Type": "application/json"},
+            )
+
+            if response.status_code == 200:
+                logger.info(f"Successfully installed model: {required_model}")
+                return {
+                    "success": True,
+                    "message": f"Model {required_model} installed successfully",
+                }
+            else:
+                error_msg = f"Failed to install model: HTTP {response.status_code}"
+                logger.error(error_msg)
+                return {"success": False, "message": error_msg}
+    except httpx.TimeoutException:
+        error_msg = (
+            "Model installation timed out - this is a large model and may take longer"
+        )
+        logger.warning(error_msg)
+        return {"success": False, "message": error_msg}
+    except Exception as e:
+        error_msg = f"Error installing model: {e}"
+        logger.error(error_msg)
+        return {"success": False, "message": error_msg}
+
+
+async def load_required_model():
+    """Load the required model using the load endpoint."""
+    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
+    logger.info(f"Loading required model: {required_model}")
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=60.0
+        ) as client:  # 1 minute timeout for model loading
+            response = await client.post(
+                f"{LEMONADE_SERVER_URL}/api/v1/load",
+                json={"model_name": required_model},
+                headers={"Content-Type": "application/json"},
+            )
+
+            if response.status_code == 200:
+                logger.info(f"Successfully loaded model: {required_model}")
+                return {
+                    "success": True,
+                    "message": f"Model {required_model} loaded successfully",
+                }
+            else:
+                error_msg = f"Failed to load model: HTTP {response.status_code}"
+                logger.error(error_msg)
+                return {"success": False, "message": error_msg}
+    except httpx.TimeoutException:
+        error_msg = "Model loading timed out"
+        logger.warning(error_msg)
+        return {"success": False, "message": error_msg}
+    except Exception as e:
+        error_msg = f"Error loading model: {e}"
+        logger.error(error_msg)
+        return {"success": False, "message": error_msg}
+
+
 async def generate_game_title(prompt: str, model: str) -> str:
     """Generate a short title for the game based on the prompt."""
     logger.debug(f"Generating title for prompt: {prompt[:50]}...")
@@ -587,6 +710,10 @@ async def setup_status():
     logger.info(f"Running check result: {is_running}")
     api_online = await check_lemonade_server()
     logger.info(f"API online check result: {api_online}")
+    model_status = await check_required_model()
+    logger.info(f"Model check result: {model_status}")
+    model_loaded_status = await check_model_loaded()
+    logger.info(f"Model loaded check result: {model_loaded_status}")
 
     result = {
         "installed": version_info["installed"],
@@ -594,6 +721,9 @@ async def setup_status():
         "compatible": version_info["compatible"],
         "running": is_running,
         "api_online": api_online,
+        "model_installed": model_status["installed"],
+        "model_name": model_status["model_name"],
+        "model_loaded": model_loaded_status["loaded"],
     }
     logger.info(f"Returning setup status: {result}")
     return JSONResponse(result)
@@ -614,6 +744,24 @@ async def start_server():
     logger.info("Start server endpoint called")
     result = await start_lemonade_server()
     logger.info(f"Start server result: {result}")
+    return JSONResponse(result)
+
+
+@app.post("/api/install-model")
+async def install_model():
+    """Install the required model."""
+    logger.info("Install model endpoint called")
+    result = await install_required_model()
+    logger.info(f"Install model result: {result}")
+    return JSONResponse(result)
+
+
+@app.post("/api/load-model")
+async def load_model():
+    """Load the required model."""
+    logger.info("Load model endpoint called")
+    result = await load_required_model()
+    logger.info(f"Load model result: {result}")
     return JSONResponse(result)
 
 

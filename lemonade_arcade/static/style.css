@@ -726,8 +726,8 @@ body {
 
 .check-icon.error {
     opacity: 1;
-    color: #ff4444;
-    text-shadow: 0 0 12px rgba(255, 68, 68, 0.6);
+    color: #ffff00;
+    text-shadow: 0 0 12px rgba(255, 255, 0, 0.6);
 }
 
 .check-icon.pending {
@@ -796,6 +796,10 @@ body {
     box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
     align-self: flex-start;
     font-family: 'Courier New', monospace;
+    white-space: pre-line;
+    text-align: center;
+    line-height: 1.2;
+    min-height: 45px;
 }
 
 .action-btn:hover:not(:disabled) {
