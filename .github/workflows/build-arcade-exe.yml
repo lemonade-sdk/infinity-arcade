@@ -67,7 +67,7 @@ jobs:
       shell: pwsh
       
     - name: Upload executable artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: lemonade-arcade-exe
         path: dist/LemonadeArcade.exe
