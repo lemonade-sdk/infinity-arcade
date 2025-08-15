@@ -31,7 +31,7 @@ class SetupManager {
         
         if (progressText) {
             if (completed === this.totalChecks) {
-                progressText.textContent = 'Setup complete! 🎉';
+                progressText.textContent = 'Setup complete! >>> READY TO LAUNCH <<<';
                 this.showLetsGoButton();
             } else {
                 progressText.textContent = `${completed}/${this.totalChecks} checks completed`;
@@ -47,15 +47,15 @@ class SetupManager {
         if (icon) {
             icon.className = 'check-icon';
             if (status === 'pending') {
-                icon.textContent = '⏳';
+                icon.textContent = '[...]';
                 icon.classList.add('pending');
             } else if (status === 'success') {
-                icon.textContent = '✅';
+                icon.textContent = '[OK]';
                 icon.classList.add('success');
                 this.checks[checkName].completed = true;
                 this.checks[checkName].inProgress = false;
             } else if (status === 'error') {
-                icon.textContent = '❌';
+                icon.textContent = '[ERR]';
                 icon.classList.add('error');
                 this.checks[checkName].completed = false;
                 this.checks[checkName].inProgress = false;
@@ -396,7 +396,7 @@ async function copyPrompt() {
             // Show temporary feedback
             const button = document.getElementById('copyPrompt');
             const originalText = button.innerHTML;
-            button.innerHTML = '✅ Copied!';
+            button.innerHTML = '[OK] Copied!';
             setTimeout(() => {
                 button.innerHTML = originalText;
             }, 1500);
