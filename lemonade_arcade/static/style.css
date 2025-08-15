@@ -89,7 +89,16 @@ body {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    height: 100%;
+    min-height: 0; /* Allow flexbox to work properly */
+    height: 100%; /* Ensure it fills the full grid area height */
+}
+
+.game-interface {
+    display: flex;
+    flex-direction: column;
+    flex: 1; /* Take all available space */
+    min-height: 0; /* Allow flexbox to work properly */
+    height: 100%; /* Ensure it fills the available height */
 }
 
 .game-library {
@@ -101,6 +110,8 @@ body {
     display: flex;
     flex-direction: column;
     flex: 1;
+    min-height: 0; /* Allow scrolling to work */
+    height: 100%; /* Ensure it fills the full grid area height */
 }
 
 .library-title {
@@ -229,6 +240,8 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0; /* Allow flexbox to work properly */
+    height: 100%; /* Ensure it fills the full grid area height */
 }
 
 .sidecar-title {
