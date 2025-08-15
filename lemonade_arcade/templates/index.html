@@ -57,15 +57,75 @@
         </div>
         
         <div class="main-content">
-            <div class="game-library">
-                <div class="library-title">Game Library</div>
-                <div class="spinner" id="gameSpinner">
-                    <div class="spinner-circle"></div>
-                    <div class="status-text" id="spinnerStatus">Generating game...</div>
+            <!-- New User Experience - Full Screen Setup -->
+            <div class="setup-screen" id="setupScreen">
+                <div class="setup-container">
+                    <div class="setup-header">
+                        <div class="setup-title">Welcome to Lemonade Arcade! 🍋</div>
+                        <div class="setup-subtitle">Let's get you set up to create amazing games with AI</div>
+                    </div>
+                    
+                    <div class="setup-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="progress-text" id="progressText">Checking system...</div>
+                    </div>
+                    
+                    <ul class="setup-checklist">
+                        <li class="checklist-item" id="checkInstalled">
+                            <div class="check-icon" id="iconInstalled">⏳</div>
+                            <div class="check-content">
+                                <div class="check-title">Lemonade Server Installation</div>
+                                <div class="check-description" id="descInstalled">Checking if Lemonade Server is installed...</div>
+                            </div>
+                            <div class="check-action">
+                                <button class="action-btn" id="btnInstalled" style="display: none;">Install Now</button>
+                            </div>
+                        </li>
+                        
+                        <li class="checklist-item" id="checkRunning">
+                            <div class="check-icon" id="iconRunning">⏳</div>
+                            <div class="check-content">
+                                <div class="check-title">Server Status</div>
+                                <div class="check-description" id="descRunning">Checking if Lemonade Server is running...</div>
+                            </div>
+                            <div class="check-action">
+                                <button class="action-btn" id="btnRunning" style="display: none;">Start Server</button>
+                            </div>
+                        </li>
+                        
+                        <li class="checklist-item" id="checkConnection">
+                            <div class="check-icon" id="iconConnection">⏳</div>
+                            <div class="check-content">
+                                <div class="check-title">API Connection</div>
+                                <div class="check-description" id="descConnection">Checking connection to Lemonade Server...</div>
+                            </div>
+                            <div class="check-action">
+                                <button class="action-btn" id="btnConnection" style="display: none;">Retry Connection</button>
+                            </div>
+                        </li>
+                    </ul>
+                    
+                    <div class="setup-actions">
+                        <button class="lets-go-btn" id="letsGoBtn" style="display: none;">Let's Go! 🚀</button>
+                        <button class="retry-btn" id="retryBtn" style="display: none;">Retry Setup</button>
+                    </div>
                 </div>
-                <div class="games-grid" id="gamesGrid">
-                    <div class="empty-library">
-                        No games yet. Create your first game below!
+            </div>
+            
+            <!-- Main Game Interface (hidden until setup complete) -->
+            <div class="game-interface" id="gameInterface" style="display: none;">
+                <div class="game-library">
+                    <div class="library-title">Game Library</div>
+                    <div class="spinner" id="gameSpinner">
+                        <div class="spinner-circle"></div>
+                        <div class="status-text" id="spinnerStatus">Generating game...</div>
+                    </div>
+                    <div class="games-grid" id="gamesGrid">
+                        <div class="empty-library">
+                            No games yet. Create your first game below!
+                        </div>
                     </div>
                 </div>
             </div>
@@ -76,7 +136,7 @@
             <div class="llm-output" id="llmOutput">Ready to generate games...</div>
         </div>
         
-        <div class="input-area">
+        <div class="input-area" id="inputArea" style="display: none;">
             <select class="model-select" id="modelSelect">
                 <option>Loading models...</option>
             </select>

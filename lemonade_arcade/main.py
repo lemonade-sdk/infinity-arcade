@@ -33,6 +33,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 # Set up logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("lemonade_arcade.main")
 
 
@@ -91,6 +94,258 @@ def save_metadata():
             json.dump(GAME_METADATA, f, indent=2)
     except Exception as e:
         print(f"Error saving metadata: {e}")
+
+
+async def check_lemonade_server_version():
+    """Check if lemonade-server is installed and get its version."""
+    logger.info("Checking lemonade-server version...")
+
+    # Try different ways to find lemonade-server
+    commands_to_try = [
+        ["lemonade-server", "--version"],
+        ["lemonade-server.bat", "--version"],
+        [
+            os.path.expanduser(
+                "~\\AppData\\Local\\lemonade_server\\bin\\lemonade-server.bat"
+            ),
+            "--version",
+        ],
+    ]
+
+    for i, cmd in enumerate(commands_to_try):
+        try:
+            logger.info(f"Trying command {i+1}: {cmd}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                shell=True,  # Use shell=True to help with PATH resolution
+            )
+            logger.info(f"Command {i+1} returned code: {result.returncode}")
+            logger.info(f"Command {i+1} stdout: '{result.stdout}'")
+            logger.info(f"Command {i+1} stderr: '{result.stderr}'")
+
+            if result.returncode == 0:
+                version_line = result.stdout.strip()
+                logger.info(f"Raw version output: '{version_line}'")
+
+                # Extract version number (format might be "lemonade-server 8.1.3" or just "8.1.3")
+                import re
+
+                version_match = re.search(r"(\d+\.\d+\.\d+)", version_line)
+                if version_match:
+                    version = version_match.group(1)
+                    logger.info(f"Extracted version: {version}")
+
+                    # Check if version >= 8.1.3
+                    version_parts = [int(x) for x in version.split(".")]
+                    required_parts = [8, 1, 3]
+                    is_compatible = version_parts >= required_parts
+                    logger.info(
+                        f"Version parts: {version_parts}, Required: {required_parts}, Compatible: {is_compatible}"
+                    )
+
+                    return {
+                        "installed": True,
+                        "version": version,
+                        "compatible": is_compatible,
+                    }
+                else:
+                    logger.warning(
+                        f"Could not extract version from output: '{version_line}'"
+                    )
+                    return {
+                        "installed": True,
+                        "version": "unknown",
+                        "compatible": False,
+                    }
+            else:
+                logger.warning(
+                    f"Command {i+1} failed with return code {result.returncode}"
+                )
+                if result.stderr:
+                    logger.warning(f"stderr: {result.stderr}")
+                # Try next command
+                continue
+
+        except FileNotFoundError as e:
+            logger.info(f"Command {i+1} not found: {e}")
+            continue
+        except subprocess.TimeoutExpired as e:
+            logger.warning(f"Command {i+1} timed out: {e}")
+            continue
+        except Exception as e:
+            logger.error(f"Unexpected error with command {i+1}: {e}")
+            continue
+
+    # If we get here, all commands failed
+    logger.error("All lemonade-server commands failed")
+    return {"installed": False, "version": None, "compatible": False}
+
+
+async def check_lemonade_server_running():
+    """Check if lemonade-server is currently running."""
+    logger.info("Checking if lemonade-server is running...")
+
+    # Try different ways to find lemonade-server
+    commands_to_try = [
+        ["lemonade-server", "status"],
+        ["lemonade-server.bat", "status"],
+        [
+            os.path.expanduser(
+                "~\\AppData\\Local\\lemonade_server\\bin\\lemonade-server.bat"
+            ),
+            "status",
+        ],
+    ]
+
+    for i, cmd in enumerate(commands_to_try):
+        try:
+            logger.info(f"Trying status command {i+1}: {cmd}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                shell=True,  # Use shell=True to help with PATH resolution
+            )
+            logger.info(f"Status command {i+1} returned code: {result.returncode}")
+            logger.info(f"Status command {i+1} stdout: '{result.stdout}'")
+            logger.info(f"Status command {i+1} stderr: '{result.stderr}'")
+
+            if result.returncode == 0:
+                output = result.stdout.strip()
+                logger.info(f"Status output: '{output}'")
+                if "Server is running" in output:
+                    logger.info("Server is running according to status command")
+                    return True
+                else:
+                    logger.info("Server is not running according to status command")
+                    return False
+            else:
+                logger.warning(
+                    f"Status command {i+1} failed with return code {result.returncode}"
+                )
+                # Try next command
+                continue
+
+        except FileNotFoundError as e:
+            logger.info(f"Status command {i+1} not found: {e}")
+            continue
+        except subprocess.TimeoutExpired as e:
+            logger.warning(f"Status command {i+1} timed out: {e}")
+            continue
+        except Exception as e:
+            logger.error(f"Unexpected error with status command {i+1}: {e}")
+            continue
+
+    # If we get here, all commands failed
+    logger.error("All lemonade-server status commands failed")
+    return False
+
+
+async def start_lemonade_server():
+    """Start lemonade-server in the background."""
+    logger.info("Attempting to start lemonade-server...")
+
+    # Try different ways to find lemonade-server
+    commands_to_try = [
+        ["lemonade-server", "serve"],
+        ["lemonade-server.bat", "serve"],
+        [
+            os.path.expanduser(
+                "~\\AppData\\Local\\lemonade_server\\bin\\lemonade-server.bat"
+            ),
+            "serve",
+        ],
+    ]
+
+    for i, cmd in enumerate(commands_to_try):
+        try:
+            logger.info(f"Trying start command {i+1}: {cmd}")
+            # Start the server in the background without waiting for it
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=(
+                    subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                ),
+                shell=True,  # Use shell=True to help with PATH resolution
+            )
+            logger.info(f"Successfully started lemonade-server with PID: {process.pid}")
+            return {"success": True, "message": "Server start command issued"}
+        except FileNotFoundError as e:
+            logger.info(f"Start command {i+1} not found: {e}")
+            continue
+        except Exception as e:
+            logger.error(f"Failed to start with command {i+1}: {e}")
+            continue
+
+    # If we get here, all commands failed
+    logger.error("All lemonade-server start commands failed")
+    return {"success": False, "message": "Failed to start server: all commands failed"}
+
+
+async def download_and_install_lemonade_server():
+    """Download and install lemonade-server silently."""
+    try:
+        # Download the installer
+        installer_url = "https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe"
+
+        # Create temp directory for installer
+        temp_dir = tempfile.mkdtemp()
+        installer_path = os.path.join(temp_dir, "Lemonade_Server_Installer.exe")
+
+        logger.info(f"Downloading installer from {installer_url}")
+
+        # Download with progress tracking
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            async with client.stream("GET", installer_url) as response:
+                if response.status_code != 200:
+                    return {
+                        "success": False,
+                        "message": f"Failed to download installer: HTTP {response.status_code}",
+                    }
+
+                with open(installer_path, "wb") as f:
+                    async for chunk in response.aiter_bytes(8192):
+                        f.write(chunk)
+
+        logger.info(f"Downloaded installer to {installer_path}")
+
+        # Run silent installation without Ryzen AI hybrid support
+        install_cmd = [installer_path, "/S"]
+
+        logger.info(f"Running silent installation: {' '.join(install_cmd)}")
+
+        result = subprocess.run(
+            install_cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minutes timeout
+        )
+
+        # Clean up installer
+        try:
+            os.remove(installer_path)
+            os.rmdir(temp_dir)
+        except Exception:
+            pass
+
+        if result.returncode == 0:
+            return {
+                "success": True,
+                "message": "Lemonade Server installed successfully",
+            }
+        else:
+            error_msg = result.stderr or result.stdout or "Unknown installation error"
+            return {"success": False, "message": f"Installation failed: {error_msg}"}
+
+    except Exception as e:
+        logger.error(f"Failed to download/install lemonade-server: {e}")
+        return {"success": False, "message": f"Failed to install: {e}"}
 
 
 async def check_lemonade_server():
@@ -320,6 +575,46 @@ async def get_games():
     """Get all saved games."""
     cleanup_finished_games()
     return JSONResponse(GAME_METADATA)
+
+
+@app.get("/api/setup-status")
+async def setup_status():
+    """Check lemonade-server installation and running status."""
+    logger.info("Setup status endpoint called")
+    version_info = await check_lemonade_server_version()
+    logger.info(f"Version check result: {version_info}")
+    is_running = await check_lemonade_server_running()
+    logger.info(f"Running check result: {is_running}")
+    api_online = await check_lemonade_server()
+    logger.info(f"API online check result: {api_online}")
+
+    result = {
+        "installed": version_info["installed"],
+        "version": version_info["version"],
+        "compatible": version_info["compatible"],
+        "running": is_running,
+        "api_online": api_online,
+    }
+    logger.info(f"Returning setup status: {result}")
+    return JSONResponse(result)
+
+
+@app.post("/api/install-server")
+async def install_server():
+    """Download and install lemonade-server."""
+    logger.info("Install server endpoint called")
+    result = await download_and_install_lemonade_server()
+    logger.info(f"Install result: {result}")
+    return JSONResponse(result)
+
+
+@app.post("/api/start-server")
+async def start_server():
+    """Start lemonade-server if installed."""
+    logger.info("Start server endpoint called")
+    result = await start_lemonade_server()
+    logger.info(f"Start server result: {result}")
+    return JSONResponse(result)
 
 
 @app.post("/api/create-game")

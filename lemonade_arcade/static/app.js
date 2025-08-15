@@ -4,6 +4,337 @@ let runningGameId = null;
 let selectedGameId = null;
 let lastServerStatusTime = 0;
 let isServerKnownOnline = false;
+let setupInProgress = false;
+let setupComplete = false;
+
+// New User Experience - Checklist Setup
+class SetupManager {
+    constructor() {
+        this.checks = {
+            installed: { completed: false, inProgress: false },
+            running: { completed: false, inProgress: false },
+            connection: { completed: false, inProgress: false }
+        };
+        this.totalChecks = 3;
+    }
+
+    updateProgress() {
+        const completed = Object.values(this.checks).filter(check => check.completed).length;
+        const percentage = (completed / this.totalChecks) * 100;
+        
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        
+        if (progressFill) {
+            progressFill.style.width = `${percentage}%`;
+        }
+        
+        if (progressText) {
+            if (completed === this.totalChecks) {
+                progressText.textContent = 'Setup complete! 🎉';
+                this.showLetsGoButton();
+            } else {
+                progressText.textContent = `${completed}/${this.totalChecks} checks completed`;
+            }
+        }
+    }
+
+    updateCheckStatus(checkName, status, description, showButton = false, buttonText = '', buttonAction = null) {
+        const icon = document.getElementById(`icon${checkName.charAt(0).toUpperCase() + checkName.slice(1)}`);
+        const desc = document.getElementById(`desc${checkName.charAt(0).toUpperCase() + checkName.slice(1)}`);
+        const btn = document.getElementById(`btn${checkName.charAt(0).toUpperCase() + checkName.slice(1)}`);
+        
+        if (icon) {
+            icon.className = 'check-icon';
+            if (status === 'pending') {
+                icon.textContent = '⏳';
+                icon.classList.add('pending');
+            } else if (status === 'success') {
+                icon.textContent = '✅';
+                icon.classList.add('success');
+                this.checks[checkName].completed = true;
+                this.checks[checkName].inProgress = false;
+            } else if (status === 'error') {
+                icon.textContent = '❌';
+                icon.classList.add('error');
+                this.checks[checkName].completed = false;
+                this.checks[checkName].inProgress = false;
+            }
+        }
+        
+        if (desc) {
+            desc.textContent = description;
+        }
+        
+        if (btn) {
+            if (showButton) {
+                btn.style.display = 'block';
+                btn.textContent = buttonText;
+                btn.onclick = buttonAction;
+                btn.disabled = false;
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+        
+        this.updateProgress();
+    }
+
+    showLetsGoButton() {
+        const letsGoBtn = document.getElementById('letsGoBtn');
+        if (letsGoBtn) {
+            letsGoBtn.style.display = 'block';
+            letsGoBtn.onclick = () => this.completeSetup();
+        }
+    }
+
+    showRetryButton() {
+        const retryBtn = document.getElementById('retryBtn');
+        if (retryBtn) {
+            retryBtn.style.display = 'block';
+            retryBtn.onclick = () => this.startSetup();
+        }
+    }
+
+    async completeSetup() {
+        console.log('Setup completed! Showing main interface...');
+        setupComplete = true;
+        
+        // Hide setup screen
+        const setupScreen = document.getElementById('setupScreen');
+        const gameInterface = document.getElementById('gameInterface');
+        const inputArea = document.getElementById('inputArea');
+        
+        if (setupScreen) setupScreen.style.display = 'none';
+        if (gameInterface) gameInterface.style.display = 'block';
+        if (inputArea) inputArea.style.display = 'flex';
+        
+        // Load the main interface data
+        checkServerStatus();
+        loadModels();
+        loadGames();
+    }
+
+    async startSetup() {
+        if (setupInProgress) return;
+        setupInProgress = true;
+        
+        console.log('Starting setup process...');
+        
+        // Reset all checks
+        this.checks = {
+            installed: { completed: false, inProgress: false },
+            running: { completed: false, inProgress: false },
+            connection: { completed: false, inProgress: false }
+        };
+        
+        // Hide buttons
+        const letsGoBtn = document.getElementById('letsGoBtn');
+        const retryBtn = document.getElementById('retryBtn');
+        if (letsGoBtn) letsGoBtn.style.display = 'none';
+        if (retryBtn) retryBtn.style.display = 'none';
+        
+        this.updateProgress();
+        
+        // Check 1: Installation
+        await this.checkInstallation();
+        
+        // Check 2: Server Running (only if installed)
+        if (this.checks.installed.completed) {
+            await this.checkServerRunning();
+        }
+        
+        // Check 3: API Connection (only if running)
+        if (this.checks.running.completed) {
+            await this.checkConnection();
+        }
+        
+        // If not all checks passed, show retry button
+        if (!this.checks.installed.completed || !this.checks.running.completed || !this.checks.connection.completed) {
+            this.showRetryButton();
+        }
+        
+        setupInProgress = false;
+    }
+
+    async checkInstallation() {
+        console.log('Checking installation...');
+        this.updateCheckStatus('installed', 'pending', 'Checking if Lemonade Server is installed...');
+        
+        try {
+            const response = await fetch('/api/setup-status');
+            const status = await response.json();
+            
+            if (status.installed && status.compatible) {
+                this.updateCheckStatus('installed', 'success', `Lemonade Server v${status.version} is installed and compatible`);
+            } else if (status.installed && !status.compatible) {
+                this.updateCheckStatus('installed', 'error', 
+                    `Found version ${status.version}, but version 8.1.3+ is required`,
+                    true, 'Update Now', () => this.installServer());
+            } else {
+                this.updateCheckStatus('installed', 'error', 
+                    'Lemonade Server is not installed',
+                    true, 'Install Now', () => this.installServer());
+            }
+        } catch (error) {
+            console.error('Failed to check installation:', error);
+            this.updateCheckStatus('installed', 'error', 
+                'Failed to check installation status',
+                true, 'Retry', () => this.checkInstallation());
+        }
+    }
+
+    async checkServerRunning() {
+        console.log('Checking if server is running...');
+        this.updateCheckStatus('running', 'pending', 'Checking if Lemonade Server is running...');
+        
+        try {
+            const response = await fetch('/api/setup-status');
+            const status = await response.json();
+            
+            if (status.running) {
+                this.updateCheckStatus('running', 'success', 'Lemonade Server is running');
+            } else {
+                this.updateCheckStatus('running', 'error', 
+                    'Lemonade Server is not running',
+                    true, 'Start Server', () => this.startServer());
+            }
+        } catch (error) {
+            console.error('Failed to check server status:', error);
+            this.updateCheckStatus('running', 'error', 
+                'Failed to check server status',
+                true, 'Retry', () => this.checkServerRunning());
+        }
+    }
+
+    async checkConnection() {
+        console.log('Checking API connection...');
+        this.updateCheckStatus('connection', 'pending', 'Testing connection to Lemonade Server...');
+        
+        try {
+            const response = await fetch('/api/setup-status');
+            const status = await response.json();
+            
+            if (status.api_online) {
+                this.updateCheckStatus('connection', 'success', 'Successfully connected to Lemonade Server API');
+            } else {
+                this.updateCheckStatus('connection', 'error', 
+                    'Cannot connect to Lemonade Server API',
+                    true, 'Retry', () => this.checkConnection());
+            }
+        } catch (error) {
+            console.error('Failed to check API connection:', error);
+            this.updateCheckStatus('connection', 'error', 
+                'Failed to test API connection',
+                true, 'Retry', () => this.checkConnection());
+        }
+    }
+
+    async installServer() {
+        const btn = document.getElementById('btnInstalled');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Installing...';
+        }
+        
+        this.updateCheckStatus('installed', 'pending', 'Downloading and installing Lemonade Server... This may take several minutes.');
+        
+        try {
+            const response = await fetch('/api/install-server', { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.success) {
+                this.updateCheckStatus('installed', 'success', 'Lemonade Server installed successfully!');
+                
+                // Wait a moment then check the next step
+                setTimeout(() => {
+                    this.checkServerRunning();
+                }, 2000);
+            } else {
+                this.updateCheckStatus('installed', 'error', 
+                    `Installation failed: ${result.message}`,
+                    true, 'Retry Install', () => this.installServer());
+            }
+        } catch (error) {
+            console.error('Installation failed:', error);
+            this.updateCheckStatus('installed', 'error', 
+                'Installation failed due to network error',
+                true, 'Retry Install', () => this.installServer());
+        }
+    }
+
+    async startServer() {
+        const btn = document.getElementById('btnRunning');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+        }
+        
+        this.updateCheckStatus('running', 'pending', 'Starting Lemonade Server...');
+        
+        try {
+            const response = await fetch('/api/start-server', { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.success) {
+                this.updateCheckStatus('running', 'pending', 'Server started. Waiting for it to be ready...');
+                
+                // Wait for server to be ready
+                await this.waitForServerReady();
+            } else {
+                this.updateCheckStatus('running', 'error', 
+                    `Failed to start server: ${result.message}`,
+                    true, 'Retry Start', () => this.startServer());
+            }
+        } catch (error) {
+            console.error('Failed to start server:', error);
+            this.updateCheckStatus('running', 'error', 
+                'Failed to start server due to network error',
+                true, 'Retry Start', () => this.startServer());
+        }
+    }
+
+    async waitForServerReady() {
+        let attempts = 0;
+        const maxAttempts = 15; // 30 seconds total
+        
+        while (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            try {
+                const response = await fetch('/api/setup-status');
+                const status = await response.json();
+                
+                if (status.running) {
+                    this.updateCheckStatus('running', 'success', 'Lemonade Server is running');
+                    
+                    // Now check API connection
+                    setTimeout(() => {
+                        this.checkConnection();
+                    }, 1000);
+                    return;
+                }
+            } catch (error) {
+                console.log('Still waiting for server...');
+            }
+            
+            attempts++;
+        }
+        
+        this.updateCheckStatus('running', 'error', 
+            'Server started but is taking too long to respond',
+            true, 'Check Again', () => this.checkServerRunning());
+    }
+}
+
+// Global setup manager instance
+const setupManager = new SetupManager();
+
+// Debug function for manual testing
+window.debugSetup = function() {
+    console.log('Manual setup debug triggered');
+    setupManager.startSetup();
+};
 
 // Context menu functionality
 function showContextMenu(x, y, gameId) {
@@ -517,16 +848,28 @@ function startGameStatusCheck() {
 
 // Handle Enter key in prompt input
 document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('promptInput').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            createGame();
-        }
-    });
+    console.log('DOM Content Loaded - Lemonade Arcade initialized');
+    
+    // Check if setup screen exists
+    const setupScreen = document.getElementById('setupScreen');
+    console.log('Setup screen element found:', !!setupScreen);
+    
+    // Setup keyboard event listeners
+    const promptInput = document.getElementById('promptInput');
+    if (promptInput) {
+        promptInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                createGame();
+            }
+        });
+    }
     
     // Context menu event listeners
-    document.getElementById('openFile').addEventListener('click', openGameFile);
-    document.getElementById('copyPrompt').addEventListener('click', copyPrompt);
+    const openFile = document.getElementById('openFile');
+    const copyPrompt = document.getElementById('copyPrompt');
+    if (openFile) openFile.addEventListener('click', openGameFile);
+    if (copyPrompt) copyPrompt.addEventListener('click', copyPrompt);
     
     // Hide context menu when clicking elsewhere
     document.addEventListener('click', function(e) {
@@ -542,12 +885,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Initialize the app
-    checkServerStatus();
-    loadModels();
-    loadGames();
+    // Start the new user experience setup process
+    setTimeout(() => {
+        console.log('Starting new user experience setup...');
+        setupManager.startSetup().catch(error => {
+            console.error('Setup process failed:', error);
+        });
+    }, 500);
     
-    // Regular status checking - the checkServerStatus function itself handles
-    // different behavior during generation vs idle states
-    setInterval(checkServerStatus, 15000); // Check every 15 seconds
+    // Regular status checking - only if setup is complete
+    setInterval(() => {
+        if (setupComplete) {
+            checkServerStatus();
+        }
+    }, 15000); // Check every 15 seconds
 });
