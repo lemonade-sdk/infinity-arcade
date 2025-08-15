@@ -87,6 +87,30 @@ if METADATA_FILE.exists():
         GAME_METADATA = {}
 
 
+# Built-in games configuration
+BUILTIN_GAMES = {
+    "builtin_snake": {
+        "title": "Dynamic Snake",
+        "created": 0,  # Special marker for built-in games
+        "prompt": "Snake but the food moves around",
+        "builtin": True,
+        "file": "snake_moving_food.py",
+    },
+    "builtin_invaders": {
+        "title": "Rainbow Space Invaders",
+        "created": 0,  # Special marker for built-in games
+        "prompt": "Space invaders with rainbow colors",
+        "builtin": True,
+        "file": "rainbow_space_invaders.py",
+    },
+}
+
+# Add built-in games to metadata if not already present
+for game_id, game_data in BUILTIN_GAMES.items():
+    if game_id not in GAME_METADATA:
+        GAME_METADATA[game_id] = game_data.copy()
+
+
 def save_metadata():
     """Save game metadata to disk."""
     try:
@@ -610,8 +634,16 @@ def launch_game(game_id: str):
     """Launch a game in a separate process."""
     logger.debug(f"Attempting to launch game {game_id}")
 
-    game_file = GAMES_DIR / f"{game_id}.py"
-    logger.debug(f"Looking for game file at: {game_file}")
+    # Check if it's a built-in game
+    if game_id in BUILTIN_GAMES:
+        # For built-in games, use the file from the builtin_games directory
+        builtin_games_dir = Path(__file__).parent / "builtin_games"
+        game_file = builtin_games_dir / BUILTIN_GAMES[game_id]["file"]
+        logger.debug(f"Looking for built-in game file at: {game_file}")
+    else:
+        # For user-generated games, use the standard games directory
+        game_file = GAMES_DIR / f"{game_id}.py"
+        logger.debug(f"Looking for user game file at: {game_file}")
 
     if not game_file.exists():
         logger.error(f"Game file not found: {game_file}")
@@ -981,6 +1013,10 @@ async def delete_game_endpoint(game_id: str):
     if game_id not in GAME_METADATA:
         raise HTTPException(status_code=404, detail="Game not found")
 
+    # Prevent deletion of built-in games
+    if game_id in BUILTIN_GAMES:
+        raise HTTPException(status_code=403, detail="Cannot delete built-in games")
+
     # Stop the game if it's running
     if game_id in RUNNING_GAMES:
         stop_game(game_id)
@@ -1003,7 +1039,15 @@ async def get_game_metadata(game_id: str):
     if game_id not in GAME_METADATA:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    return JSONResponse(GAME_METADATA[game_id])
+    metadata = GAME_METADATA[game_id].copy()
+
+    # For built-in games, hide sensitive information
+    if game_id in BUILTIN_GAMES:
+        # Remove prompt and other sensitive data for built-in games
+        metadata.pop("prompt", None)
+        metadata["builtin"] = True
+
+    return JSONResponse(metadata)
 
 
 @app.post("/api/open-game-file/{game_id}")
@@ -1011,6 +1055,12 @@ async def open_game_file(game_id: str):
     """Open the Python file for a game in the default editor."""
     if game_id not in GAME_METADATA:
         raise HTTPException(status_code=404, detail="Game not found")
+
+    # Prevent opening built-in game files
+    if game_id in BUILTIN_GAMES:
+        raise HTTPException(
+            status_code=403, detail="Cannot view source code of built-in games"
+        )
 
     game_file = GAMES_DIR / f"{game_id}.py"
     if not game_file.exists():

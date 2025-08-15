@@ -170,6 +170,21 @@ body {
     background: linear-gradient(145deg, #2e2e1a, #3e3e16);
 }
 
+.game-item.builtin {
+    border-color: #ffd700;
+    background: linear-gradient(145deg, #2e2e1a, #3e3e16);
+}
+
+.game-item.builtin:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
+    border-color: #ffff00;
+}
+
+.game-item.builtin .delete-btn {
+    display: none; /* Hide delete button for built-in games */
+}
+
 .delete-btn {
     position: absolute;
     top: 5px;
@@ -968,4 +983,15 @@ body {
     height: 1px;
     background: #333;
     margin: 4px 8px;
+}
+
+.context-menu-item.builtin-info {
+    color: #ffd700;
+    cursor: default;
+    background: #2a2a2a;
+}
+
+.context-menu-item.builtin-info:hover {
+    background: #2a2a2a;
+    color: #ffd700;
 }

@@ -505,6 +505,29 @@ function showContextMenu(x, y, gameId) {
     const contextMenu = document.getElementById('contextMenu');
     selectedGameId = gameId;
     
+    // Check if it's a built-in game
+    const isBuiltin = games[gameId] && (games[gameId].builtin || gameId.startsWith('builtin_'));
+    
+    if (isBuiltin) {
+        // Show built-in game context menu
+        contextMenu.innerHTML = `
+            <div class="context-menu-item builtin-info">
+                🎮 Built-in game
+            </div>
+        `;
+    } else {
+        // Show regular context menu for user-created games
+        contextMenu.innerHTML = `
+            <button class="context-menu-item" id="openFile" onclick="openGameFile()">
+                📄 Open Python File
+            </button>
+            <div class="context-menu-separator"></div>
+            <button class="context-menu-item" id="copyPrompt" onclick="copyPrompt()">
+                📋 Copy Prompt
+            </button>
+        `;
+    }
+    
     contextMenu.style.display = 'block';
     contextMenu.style.left = x + 'px';
     contextMenu.style.top = y + 'px';
@@ -528,6 +551,13 @@ function hideContextMenu() {
 async function openGameFile() {
     if (!selectedGameId) return;
     
+    // Check if it's a built-in game
+    if (games[selectedGameId] && (games[selectedGameId].builtin || selectedGameId.startsWith('builtin_'))) {
+        alert('Cannot view source code of built-in games');
+        hideContextMenu();
+        return;
+    }
+    
     try {
         const response = await fetch(`/api/open-game-file/${selectedGameId}`, {
             method: 'POST'
@@ -547,6 +577,13 @@ async function openGameFile() {
 
 async function copyPrompt() {
     if (!selectedGameId) return;
+    
+    // Check if it's a built-in game
+    if (games[selectedGameId] && (games[selectedGameId].builtin || selectedGameId.startsWith('builtin_'))) {
+        alert('Cannot copy prompt for built-in games');
+        hideContextMenu();
+        return;
+    }
     
     try {
         const response = await fetch(`/api/game-metadata/${selectedGameId}`);
@@ -753,15 +790,47 @@ function renderGames() {
     }
     
     grid.innerHTML = '';
-    Object.entries(games).forEach(([gameId, gameData]) => {
+    
+    // Sort games so built-in games appear first
+    const sortedGames = Object.entries(games).sort(([gameIdA, gameDataA], [gameIdB, gameDataB]) => {
+        const isBuiltinA = gameDataA.builtin || gameIdA.startsWith('builtin_');
+        const isBuiltinB = gameDataB.builtin || gameIdB.startsWith('builtin_');
+        
+        // Built-in games come first
+        if (isBuiltinA && !isBuiltinB) return -1;
+        if (!isBuiltinA && isBuiltinB) return 1;
+        
+        // Within each category, sort by creation time (or alphabetically for built-ins)
+        if (isBuiltinA && isBuiltinB) {
+            return gameDataA.title.localeCompare(gameDataB.title);
+        } else {
+            return (gameDataB.created || 0) - (gameDataA.created || 0); // Newer first for user games
+        }
+    });
+    
+    sortedGames.forEach(([gameId, gameData]) => {
         const gameItem = document.createElement('div');
         gameItem.className = 'game-item';
+        
+        // Check if it's a built-in game
+        const isBuiltin = gameData.builtin || gameId.startsWith('builtin_');
+        
         if (runningGameId === gameId) {
             gameItem.classList.add('running');
         }
         
+        if (isBuiltin) {
+            gameItem.classList.add('builtin');
+        }
+        
+        // Only show delete button for non-built-in games
+        let deleteButtonHtml = '';
+        if (!isBuiltin) {
+            deleteButtonHtml = `<button class="delete-btn" onclick="deleteGame('${gameId}')">&times;</button>`;
+        }
+        
         gameItem.innerHTML = `
-            <button class="delete-btn" onclick="deleteGame('${gameId}')">&times;</button>
+            ${deleteButtonHtml}
             <div class="game-title">${gameData.title}</div>
         `;
         
@@ -772,7 +841,7 @@ function renderGames() {
             }
         });
         
-        // Right click for context menu
+        // Right click for context menu (for all games)
         gameItem.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             showContextMenu(e.clientX, e.clientY, gameId);
@@ -944,6 +1013,12 @@ async function launchGame(gameId) {
 
 // Delete a game
 async function deleteGame(gameId) {
+    // Check if it's a built-in game
+    if (games[gameId] && (games[gameId].builtin || gameId.startsWith('builtin_'))) {
+        alert('Cannot delete built-in games');
+        return;
+    }
+    
     if (!confirm('Are you sure you want to delete this game?')) {
         return;
     }
@@ -1027,12 +1102,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
-    // Context menu event listeners
-    const openFile = document.getElementById('openFile');
-    const copyPrompt = document.getElementById('copyPrompt');
-    if (openFile) openFile.addEventListener('click', openGameFile);
-    if (copyPrompt) copyPrompt.addEventListener('click', copyPrompt);
     
     // Hide context menu when clicking elsewhere
     document.addEventListener('click', function(e) {
