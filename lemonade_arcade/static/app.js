@@ -195,9 +195,9 @@ class SetupManager {
             if (status.running) {
                 this.updateCheckStatus('running', 'success', 'Lemonade Server is running');
             } else {
-                this.updateCheckStatus('running', 'error', 
-                    'Lemonade Server is not running',
-                    true, 'Start Server', () => this.startServer());
+                this.updateCheckStatus('running', 'pending', 'Lemonade Server is not running. Starting automatically...');
+                // Automatically start the server instead of asking the user
+                await this.startServer();
             }
         } catch (error) {
             console.error('Failed to check server status:', error);
@@ -246,7 +246,7 @@ class SetupManager {
             if (result.success) {
                 this.updateCheckStatus('installed', 'success', 'Lemonade Server installed successfully!');
                 
-                // Wait a moment then check the next step
+                // Wait a moment then automatically check the next step
                 setTimeout(() => {
                     this.checkServerRunning();
                 }, 2000);
