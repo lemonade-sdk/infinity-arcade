@@ -572,32 +572,28 @@ def main():
     import webbrowser
     import threading
 
-    # Hide console window on Windows for GUI mode
-    if sys.platform == "win32" and (sys.stdout is None or not sys.stdout.isatty()):
-        try:
-            import ctypes
-
-            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-            user32 = ctypes.WinDLL("user32", use_last_error=True)
-
-            SW_HIDE = 0
-            hWnd = kernel32.GetConsoleWindow()
-            if hWnd:
-                user32.ShowWindow(hWnd, SW_HIDE)
-        except Exception:
-            pass  # Ignore errors in console hiding
+    # Keep console visible for debugging and control
+    print("Starting Lemonade Arcade...")
+    print("Press Ctrl+C to quit")
 
     port = 8080
 
     # Start the server in a separate thread
     def run_server():
-        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+        print(f"Starting Lemonade Arcade server on http://127.0.0.1:{port}")
+        try:
+            uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+        except Exception as e:
+            print(f"Error starting server: {e}")
 
+    print("Launching server thread...")
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
     # Wait a moment then open browser
-    time.sleep(2)
+    print("Waiting for server to start...")
+    time.sleep(3)
+    print(f"Opening browser to http://127.0.0.1:{port}")
     webbrowser.open(f"http://127.0.0.1:{port}")
 
     try:
