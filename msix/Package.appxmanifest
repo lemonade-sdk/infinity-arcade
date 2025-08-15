@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+         xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10">
+
+  <Identity Name="LemonadeSDK.LemonadeArcade"
+            Publisher="CN=Lemonade SDK"
+            Version="0.1.0.0" />
+
+  <Properties>
+    <DisplayName>Lemonade Arcade</DisplayName>
+    <PublisherDisplayName>Lemonade SDK</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>AI-powered game generator and arcade using Lemonade Server</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="x-generate"/>
+  </Resources>
+
+  <Applications>
+    <Application Id="LemonadeArcade"
+                 Executable="LemonadeArcade.exe"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+          DisplayName="Lemonade Arcade"
+          Description="AI-powered game generator and arcade"
+          BackgroundColor="transparent"
+          Square150x150Logo="Assets\Square150x150Logo.png"
+          Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+      
+      <Extensions>
+        <desktop:Extension Category="windows.fullTrustProcess" Executable="LemonadeArcade.exe" />
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <Capability Name="privateNetworkClientServer" />
+  </Capabilities>
+
+</Package>

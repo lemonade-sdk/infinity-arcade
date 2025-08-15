@@ -562,11 +562,26 @@ def main():
     import webbrowser
     import threading
 
+    # Hide console window on Windows for GUI mode
+    if sys.platform == "win32" and not sys.stdout.isatty():
+        try:
+            import ctypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+
+            SW_HIDE = 0
+            hWnd = kernel32.GetConsoleWindow()
+            if hWnd:
+                user32.ShowWindow(hWnd, SW_HIDE)
+        except Exception:
+            pass  # Ignore errors in console hiding
+
     port = 8080
 
     # Start the server in a separate thread
     def run_server():
-        uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()

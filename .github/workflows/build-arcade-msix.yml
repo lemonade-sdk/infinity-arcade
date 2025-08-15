@@ -1,0 +1,230 @@
+name: Build Lemonade Arcade MSIX Installer
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**'
+      - '.github/workflows/build-arcade-msix.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 0.1.0)'
+        required: false
+        default: '0.1.0'
+
+jobs:
+  build-msix:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -e .
+        python -m pip install pyinstaller
+    
+    - name: Create application icon
+      run: |
+        # Create a simple icon using Python PIL
+        python -c "
+        from PIL import Image, ImageDraw
+        import os
+        
+        # Create icon directory
+        os.makedirs('assets', exist_ok=True)
+        
+        # Create a simple icon
+        img = Image.new('RGBA', (256, 256), (255, 215, 0, 255))  # Gold background
+        draw = ImageDraw.Draw(img)
+        
+        # Draw a simple 'L' shape for Lemonade
+        draw.rectangle([50, 50, 90, 206], fill=(255, 255, 255, 255))  # Vertical line
+        draw.rectangle([50, 166, 150, 206], fill=(255, 255, 255, 255))  # Horizontal line
+        
+        # Save as ICO
+        img.save('assets/icon.ico', format='ICO', sizes=[(16,16), (32,32), (48,48), (256,256)])
+        "
+      shell: pwsh
+      
+    - name: Create MSIX assets
+      run: |
+        # Create MSIX assets using Python PIL
+        python -c "
+        from PIL import Image, ImageDraw
+        import os
+        
+        # Create assets directory
+        os.makedirs('msix/Assets', exist_ok=True)
+        
+        def create_logo(size, filename):
+            img = Image.new('RGBA', size, (255, 215, 0, 255))  # Gold background
+            draw = ImageDraw.Draw(img)
+            
+            # Scale the L shape based on image size
+            scale = min(size) / 256
+            line_width = int(40 * scale)
+            margin = int(50 * scale)
+            
+            # Draw L shape
+            draw.rectangle([margin, margin, margin + line_width, size[1] - margin], fill=(255, 255, 255, 255))
+            draw.rectangle([margin, size[1] - margin - line_width, size[0] - margin, size[1] - margin], fill=(255, 255, 255, 255))
+            
+            img.save(f'msix/Assets/{filename}', format='PNG')
+        
+        # Create required assets
+        create_logo((50, 50), 'StoreLogo.png')
+        create_logo((150, 150), 'Square150x150Logo.png')
+        create_logo((44, 44), 'Square44x44Logo.png')
+        create_logo((310, 150), 'Wide310x150Logo.png')
+        create_logo((620, 300), 'SplashScreen.png')
+        "
+      shell: pwsh
+      
+    - name: Build executable with PyInstaller
+      run: |
+        python -m PyInstaller lemonade_arcade.spec
+      shell: pwsh
+      
+    - name: Install Windows SDK (if needed)
+      run: |
+        # Check if makeappx.exe is available
+        $makeappx = Get-Command makeappx.exe -ErrorAction SilentlyContinue
+        if (-not $makeappx) {
+          # Try to find it in Windows SDK locations
+          $sdkPaths = @(
+            "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe",
+            "${env:ProgramFiles}\Windows Kits\10\bin\*\x64\makeappx.exe"
+          )
+          
+          $found = $false
+          foreach ($pattern in $sdkPaths) {
+            $paths = Get-ChildItem $pattern -ErrorAction SilentlyContinue | Sort-Object Name -Descending
+            if ($paths) {
+              $makeappxPath = $paths[0].FullName
+              Write-Host "Found makeappx.exe at: $makeappxPath"
+              $env:PATH = "$($paths[0].Directory);$env:PATH"
+              $found = $true
+              break
+            }
+          }
+          
+          if (-not $found) {
+            Write-Error "makeappx.exe not found. Windows SDK may not be installed."
+            exit 1
+          }
+        }
+      shell: pwsh
+      
+    - name: Create MSIX package
+      run: |
+        # Create staging directory
+        $stagingDir = "msix_staging"
+        if (Test-Path $stagingDir) { Remove-Item -Recurse -Force $stagingDir }
+        New-Item -ItemType Directory -Path $stagingDir | Out-Null
+        
+        # Copy executable
+        Copy-Item "dist\LemonadeArcade.exe" "$stagingDir\LemonadeArcade.exe"
+        
+        # Copy manifest
+        Copy-Item "msix\Package.appxmanifest" "$stagingDir\Package.appxmanifest"
+        
+        # Copy assets
+        Copy-Item -Recurse "msix\Assets" "$stagingDir\Assets"
+        
+        # Find makeappx.exe
+        $makeappx = Get-Command makeappx.exe -ErrorAction SilentlyContinue
+        if (-not $makeappx) {
+          $sdkPaths = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" -ErrorAction SilentlyContinue | Sort-Object Name -Descending
+          if ($sdkPaths) {
+            $makeappx = $sdkPaths[0].FullName
+          } else {
+            Write-Error "makeappx.exe not found"
+            exit 1
+          }
+        } else {
+          $makeappx = $makeappx.Source
+        }
+        
+        # Create MSIX package
+        $outputMsix = "dist\LemonadeArcade.msix"
+        & "$makeappx" pack /d "$stagingDir" /p "$outputMsix"
+        
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "Failed to create MSIX package"
+          exit 1
+        }
+        
+        # Clean up staging
+        Remove-Item -Recurse -Force $stagingDir
+        
+        Write-Host "MSIX package created successfully: $outputMsix"
+      shell: pwsh
+      
+    - name: Verify build outputs
+      run: |
+        if (-not (Test-Path "dist\LemonadeArcade.exe")) {
+          Write-Error "Executable not found"
+          exit 1
+        }
+        
+        if (-not (Test-Path "dist\LemonadeArcade.msix")) {
+          Write-Error "MSIX package not found"
+          exit 1
+        }
+        
+        # Show file sizes
+        $exe = Get-Item "dist\LemonadeArcade.exe"
+        $msix = Get-Item "dist\LemonadeArcade.msix"
+        
+        Write-Host "Build artifacts:"
+        Write-Host "  - Executable: $($exe.Name) ($([math]::Round($exe.Length / 1MB, 2)) MB)"
+        Write-Host "  - MSIX Package: $($msix.Name) ($([math]::Round($msix.Length / 1MB, 2)) MB)"
+      shell: pwsh
+      
+    - name: Upload executable artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: lemonade-arcade-exe
+        path: dist/LemonadeArcade.exe
+        retention-days: 30
+        
+    - name: Upload MSIX artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: lemonade-arcade-msix
+        path: dist/LemonadeArcade.msix
+        retention-days: 30
+        
+    - name: Upload to release (if release)
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: dist/LemonadeArcade.msix
+        asset_name: LemonadeArcade-${{ github.event.release.tag_name }}.msix
+        asset_content_type: application/x-msix

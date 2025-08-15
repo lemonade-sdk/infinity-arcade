@@ -15,10 +15,14 @@ setup(
         "httpx>=0.25.0",
         "jinja2>=3.1.0",
         "python-multipart>=0.0.6",
+        "pillow>=9.0.0",  # For icon generation
     ],
     entry_points={
         "console_scripts": [
             "lemonade-arcade=lemonade_arcade.cli:main",
+        ],
+        "gui_scripts": [
+            "lemonade-arcade-gui=lemonade_arcade.main:main",
         ],
     },
     python_requires=">=3.8",
