@@ -33,6 +33,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 # Set up logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("lemonade_arcade.main")
 
 
@@ -41,16 +44,22 @@ def get_resource_path(relative_path):
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
+        # In PyInstaller bundle, resources are under lemonade_arcade/
+        if relative_path in ["static", "templates"]:
+            return os.path.join(base_path, "lemonade_arcade", relative_path)
+        else:
+            return os.path.join(base_path, relative_path)
     except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+        # Use the directory of this file as the base path for development
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base_path, relative_path)
 
 
 app = FastAPI(title="Lemonade Arcade", version="0.1.0")
 
 # Set up static files and templates
-STATIC_DIR = get_resource_path("lemonade_arcade/static")
-TEMPLATES_DIR = get_resource_path("lemonade_arcade/templates")
+STATIC_DIR = get_resource_path("static")
+TEMPLATES_DIR = get_resource_path("templates")
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -84,6 +93,30 @@ if METADATA_FILE.exists():
         GAME_METADATA = {}
 
 
+# Built-in games configuration
+BUILTIN_GAMES = {
+    "builtin_snake": {
+        "title": "Dynamic Snake",
+        "created": 0,  # Special marker for built-in games
+        "prompt": "Snake but the food moves around",
+        "builtin": True,
+        "file": "snake_moving_food.py",
+    },
+    "builtin_invaders": {
+        "title": "Rainbow Space Invaders",
+        "created": 0,  # Special marker for built-in games
+        "prompt": "Space invaders with rainbow colors",
+        "builtin": True,
+        "file": "rainbow_space_invaders.py",
+    },
+}
+
+# Add built-in games to metadata if not already present
+for game_id, game_data in BUILTIN_GAMES.items():
+    if game_id not in GAME_METADATA:
+        GAME_METADATA[game_id] = game_data.copy()
+
+
 def save_metadata():
     """Save game metadata to disk."""
     try:
@@ -91,6 +124,316 @@ def save_metadata():
             json.dump(GAME_METADATA, f, indent=2)
     except Exception as e:
         print(f"Error saving metadata: {e}")
+
+
+async def check_lemonade_server_version():
+    """Check if lemonade-server is installed and get its version."""
+    logger.info("Checking lemonade-server version...")
+
+    # Try different ways to find lemonade-server
+    commands_to_try = [
+        ["lemonade-server", "--version"],
+        ["lemonade-server.bat", "--version"],
+        [
+            os.path.expanduser(
+                "~\\AppData\\Local\\lemonade_server\\bin\\lemonade-server.bat"
+            ),
+            "--version",
+        ],
+    ]
+
+    for i, cmd in enumerate(commands_to_try):
+        try:
+            logger.info(f"Trying command {i+1}: {cmd}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                shell=True,  # Use shell=True to help with PATH resolution
+            )
+            logger.info(f"Command {i+1} returned code: {result.returncode}")
+            logger.info(f"Command {i+1} stdout: '{result.stdout}'")
+            logger.info(f"Command {i+1} stderr: '{result.stderr}'")
+
+            if result.returncode == 0:
+                version_line = result.stdout.strip()
+                logger.info(f"Raw version output: '{version_line}'")
+
+                # Extract version number (format might be "lemonade-server 8.1.3" or just "8.1.3")
+                import re
+
+                version_match = re.search(r"(\d+\.\d+\.\d+)", version_line)
+                if version_match:
+                    version = version_match.group(1)
+                    logger.info(f"Extracted version: {version}")
+
+                    # Check if version >= 8.1.3
+                    version_parts = [int(x) for x in version.split(".")]
+                    required_parts = [8, 1, 3]
+                    is_compatible = version_parts >= required_parts
+                    logger.info(
+                        f"Version parts: {version_parts}, Required: {required_parts}, Compatible: {is_compatible}"
+                    )
+
+                    return {
+                        "installed": True,
+                        "version": version,
+                        "compatible": is_compatible,
+                    }
+                else:
+                    logger.warning(
+                        f"Could not extract version from output: '{version_line}'"
+                    )
+                    return {
+                        "installed": True,
+                        "version": "unknown",
+                        "compatible": False,
+                    }
+            else:
+                logger.warning(
+                    f"Command {i+1} failed with return code {result.returncode}"
+                )
+                if result.stderr:
+                    logger.warning(f"stderr: {result.stderr}")
+                # Try next command
+                continue
+
+        except FileNotFoundError as e:
+            logger.info(f"Command {i+1} not found: {e}")
+            continue
+        except subprocess.TimeoutExpired as e:
+            logger.warning(f"Command {i+1} timed out: {e}")
+            continue
+        except Exception as e:
+            logger.error(f"Unexpected error with command {i+1}: {e}")
+            continue
+
+    # If we get here, all commands failed
+    logger.error("All lemonade-server commands failed")
+    return {"installed": False, "version": None, "compatible": False}
+
+
+async def check_lemonade_server_running():
+    """Check if lemonade-server is currently running."""
+    logger.info("Checking if lemonade-server is running...")
+
+    # Try different ways to find lemonade-server
+    commands_to_try = [
+        ["lemonade-server", "status"],
+        ["lemonade-server.bat", "status"],
+        [
+            os.path.expanduser(
+                "~\\AppData\\Local\\lemonade_server\\bin\\lemonade-server.bat"
+            ),
+            "status",
+        ],
+    ]
+
+    for i, cmd in enumerate(commands_to_try):
+        try:
+            logger.info(f"Trying status command {i+1}: {cmd}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                shell=True,  # Use shell=True to help with PATH resolution
+            )
+            logger.info(f"Status command {i+1} returned code: {result.returncode}")
+            logger.info(f"Status command {i+1} stdout: '{result.stdout}'")
+            logger.info(f"Status command {i+1} stderr: '{result.stderr}'")
+
+            if result.returncode == 0:
+                output = result.stdout.strip()
+                logger.info(f"Status output: '{output}'")
+                if "Server is running" in output:
+                    logger.info("Server is running according to status command")
+                    return True
+                else:
+                    logger.info("Server is not running according to status command")
+                    return False
+            else:
+                logger.warning(
+                    f"Status command {i+1} failed with return code {result.returncode}"
+                )
+                # Try next command
+                continue
+
+        except FileNotFoundError as e:
+            logger.info(f"Status command {i+1} not found: {e}")
+            continue
+        except subprocess.TimeoutExpired as e:
+            logger.warning(f"Status command {i+1} timed out: {e}")
+            continue
+        except Exception as e:
+            logger.error(f"Unexpected error with status command {i+1}: {e}")
+            continue
+
+    # If we get here, all commands failed
+    logger.error("All lemonade-server status commands failed")
+    return False
+
+
+async def start_lemonade_server():
+    """Start lemonade-server in the background."""
+    logger.info("Attempting to start lemonade-server...")
+
+    # Try different ways to find lemonade-server
+    commands_to_try = [
+        ["lemonade-server", "serve"],
+        ["lemonade-server.bat", "serve"],
+        [
+            os.path.expanduser(
+                "~\\AppData\\Local\\lemonade_server\\bin\\lemonade-server.bat"
+            ),
+            "serve",
+        ],
+    ]
+
+    for i, cmd in enumerate(commands_to_try):
+        try:
+            logger.info(f"Trying start command {i+1}: {cmd}")
+
+            # Create temp files to capture output for debugging
+            import tempfile
+
+            stdout_file = tempfile.NamedTemporaryFile(
+                mode="w+", delete=False, suffix=".log"
+            )
+            stderr_file = tempfile.NamedTemporaryFile(
+                mode="w+", delete=False, suffix=".log"
+            )
+
+            # Start the server in the background without waiting for it
+            process = subprocess.Popen(
+                cmd,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                creationflags=(
+                    subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                ),
+                shell=True,  # Use shell=True to help with PATH resolution
+            )
+
+            # Give the process a moment to start and check if it's still running
+            import time
+
+            time.sleep(1)
+
+            # Check if process is still alive
+            if process.poll() is None:
+                logger.info(
+                    f"Successfully started lemonade-server with PID: {process.pid}"
+                )
+
+                # Close temp files
+                stdout_file.close()
+                stderr_file.close()
+
+                return {"success": True, "message": "Server start command issued"}
+            else:
+                # Process died immediately, check error output
+                stdout_file.close()
+                stderr_file.close()
+
+                # Read the error output
+                try:
+                    with open(stderr_file.name, "r") as f:
+                        stderr_content = f.read().strip()
+                    with open(stdout_file.name, "r") as f:
+                        stdout_content = f.read().strip()
+
+                    logger.error(
+                        f"Command {i+1} failed immediately. Return code: {process.returncode}"
+                    )
+                    if stderr_content:
+                        logger.error(f"Stderr: {stderr_content}")
+                    if stdout_content:
+                        logger.info(f"Stdout: {stdout_content}")
+
+                    # Clean up temp files
+                    try:
+                        os.unlink(stdout_file.name)
+                        os.unlink(stderr_file.name)
+                    except:
+                        pass
+
+                except Exception as read_error:
+                    logger.error(f"Could not read process output: {read_error}")
+
+                continue
+
+        except FileNotFoundError as e:
+            logger.info(f"Start command {i+1} not found: {e}")
+            continue
+        except Exception as e:
+            logger.error(f"Failed to start with command {i+1}: {e}")
+            continue
+
+    # If we get here, all commands failed
+    logger.error("All lemonade-server start commands failed")
+    return {"success": False, "message": "Failed to start server: all commands failed"}
+
+
+async def download_and_install_lemonade_server():
+    """Download and install lemonade-server silently."""
+    try:
+        # Download the installer
+        installer_url = "https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe"
+
+        # Create temp directory for installer
+        temp_dir = tempfile.mkdtemp()
+        installer_path = os.path.join(temp_dir, "Lemonade_Server_Installer.exe")
+
+        logger.info(f"Downloading installer from {installer_url}")
+
+        # Download with progress tracking
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            async with client.stream("GET", installer_url) as response:
+                if response.status_code != 200:
+                    return {
+                        "success": False,
+                        "message": f"Failed to download installer: HTTP {response.status_code}",
+                    }
+
+                with open(installer_path, "wb") as f:
+                    async for chunk in response.aiter_bytes(8192):
+                        f.write(chunk)
+
+        logger.info(f"Downloaded installer to {installer_path}")
+
+        # Run silent installation without Ryzen AI hybrid support
+        install_cmd = [installer_path, "/S"]
+
+        logger.info(f"Running silent installation: {' '.join(install_cmd)}")
+
+        result = subprocess.run(
+            install_cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minutes timeout
+        )
+
+        # Clean up installer
+        try:
+            os.remove(installer_path)
+            os.rmdir(temp_dir)
+        except Exception:
+            pass
+
+        if result.returncode == 0:
+            return {
+                "success": True,
+                "message": "Lemonade Server installed successfully",
+            }
+        else:
+            error_msg = result.stderr or result.stdout or "Unknown installation error"
+            return {"success": False, "message": f"Installation failed: {error_msg}"}
+
+    except Exception as e:
+        logger.error(f"Failed to download/install lemonade-server: {e}")
+        return {"success": False, "message": f"Failed to install: {e}"}
 
 
 async def check_lemonade_server():
@@ -136,6 +479,129 @@ async def get_available_models():
     except Exception as e:
         logger.debug(f"Error getting models: {e}")
     return []
+
+
+async def check_required_model():
+    """Check if the required model is installed."""
+    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
+    logger.info(f"Checking for required model: {required_model}")
+
+    try:
+        models = await get_available_models()
+        is_installed = required_model in models
+        logger.info(f"Required model installed: {is_installed}")
+        return {"installed": is_installed, "model_name": required_model}
+    except Exception as e:
+        logger.error(f"Error checking required model: {e}")
+        return {"installed": False, "model_name": required_model}
+
+
+async def check_model_loaded():
+    """Check if the required model is currently loaded."""
+    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
+    logger.info(f"Checking if model is loaded: {required_model}")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(f"{LEMONADE_SERVER_URL}/api/v1/health")
+
+            if response.status_code == 200:
+                status_data = response.json()
+                # Check if the required model is the currently loaded model
+                loaded_model = status_data.get("model_loaded", "")
+                is_loaded = loaded_model == required_model
+                logger.info(
+                    f"Model loaded status: {is_loaded}, current model: {loaded_model}"
+                )
+                return {
+                    "loaded": is_loaded,
+                    "model_name": required_model,
+                    "current_model": loaded_model,
+                }
+            else:
+                logger.warning(
+                    f"Failed to get server status: HTTP {response.status_code}"
+                )
+                return {
+                    "loaded": False,
+                    "model_name": required_model,
+                    "current_model": None,
+                }
+    except Exception as e:
+        logger.error(f"Error checking model loaded status: {e}")
+        return {"loaded": False, "model_name": required_model, "current_model": None}
+
+
+async def install_required_model():
+    """Install the required model using the pull endpoint."""
+    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
+    logger.info(f"Installing required model: {required_model}")
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=600.0
+        ) as client:  # 10 minute timeout for model download
+            response = await client.post(
+                f"{LEMONADE_SERVER_URL}/api/v1/pull",
+                json={"model_name": required_model},
+                headers={"Content-Type": "application/json"},
+            )
+
+            if response.status_code == 200:
+                logger.info(f"Successfully installed model: {required_model}")
+                return {
+                    "success": True,
+                    "message": f"Model {required_model} installed successfully",
+                }
+            else:
+                error_msg = f"Failed to install model: HTTP {response.status_code}"
+                logger.error(error_msg)
+                return {"success": False, "message": error_msg}
+    except httpx.TimeoutException:
+        error_msg = (
+            "Model installation timed out - this is a large model and may take longer"
+        )
+        logger.warning(error_msg)
+        return {"success": False, "message": error_msg}
+    except Exception as e:
+        error_msg = f"Error installing model: {e}"
+        logger.error(error_msg)
+        return {"success": False, "message": error_msg}
+
+
+async def load_required_model():
+    """Load the required model using the load endpoint."""
+    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
+    logger.info(f"Loading required model: {required_model}")
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=60.0
+        ) as client:  # 1 minute timeout for model loading
+            response = await client.post(
+                f"{LEMONADE_SERVER_URL}/api/v1/load",
+                json={"model_name": required_model},
+                headers={"Content-Type": "application/json"},
+            )
+
+            if response.status_code == 200:
+                logger.info(f"Successfully loaded model: {required_model}")
+                return {
+                    "success": True,
+                    "message": f"Model {required_model} loaded successfully",
+                }
+            else:
+                error_msg = f"Failed to load model: HTTP {response.status_code}"
+                logger.error(error_msg)
+                return {"success": False, "message": error_msg}
+    except httpx.TimeoutException:
+        error_msg = "Model loading timed out"
+        logger.warning(error_msg)
+        return {"success": False, "message": error_msg}
+    except Exception as e:
+        error_msg = f"Error loading model: {e}"
+        logger.error(error_msg)
+        return {"success": False, "message": error_msg}
 
 
 async def generate_game_title(prompt: str, model: str) -> str:
@@ -232,8 +698,16 @@ def launch_game(game_id: str):
     """Launch a game in a separate process."""
     logger.debug(f"Attempting to launch game {game_id}")
 
-    game_file = GAMES_DIR / f"{game_id}.py"
-    logger.debug(f"Looking for game file at: {game_file}")
+    # Check if it's a built-in game
+    if game_id in BUILTIN_GAMES:
+        # For built-in games, use the file from the builtin_games directory
+        builtin_games_dir = Path(__file__).parent / "builtin_games"
+        game_file = builtin_games_dir / BUILTIN_GAMES[game_id]["file"]
+        logger.debug(f"Looking for built-in game file at: {game_file}")
+    else:
+        # For user-generated games, use the standard games directory
+        game_file = GAMES_DIR / f"{game_id}.py"
+        logger.debug(f"Looking for user game file at: {game_file}")
 
     if not game_file.exists():
         logger.error(f"Game file not found: {game_file}")
@@ -320,6 +794,132 @@ async def get_games():
     """Get all saved games."""
     cleanup_finished_games()
     return JSONResponse(GAME_METADATA)
+
+
+@app.get("/api/installation-status")
+async def installation_status():
+    """Check lemonade-server installation status ONLY."""
+    logger.info("Installation status endpoint called")
+    version_info = await check_lemonade_server_version()
+    logger.info(f"Version check result: {version_info}")
+
+    result = {
+        "installed": version_info["installed"],
+        "version": version_info["version"],
+        "compatible": version_info["compatible"],
+    }
+    logger.info(f"Returning installation status: {result}")
+    return JSONResponse(result)
+
+
+@app.get("/api/server-running-status")
+async def server_running_status():
+    """Check if lemonade-server is running ONLY, and auto-start if needed."""
+    logger.info("Server running status endpoint called")
+    is_running = await check_lemonade_server_running()
+    logger.info(f"Running check result: {is_running}")
+
+    # If server is not running, try to start it automatically
+    if not is_running:
+        logger.info("Server not running, attempting to start automatically...")
+        start_result = await start_lemonade_server()
+        logger.info(f"Auto-start result: {start_result}")
+
+        if start_result["success"]:
+            # Give it a moment to start up
+            import asyncio
+
+            await asyncio.sleep(2)
+            # Check again
+            is_running = await check_lemonade_server_running()
+            logger.info(f"Running check after auto-start: {is_running}")
+
+    result = {
+        "running": is_running,
+    }
+    logger.info(f"Returning server running status: {result}")
+    return JSONResponse(result)
+
+
+@app.get("/api/api-connection-status")
+async def api_connection_status():
+    """Check API connection status ONLY."""
+    logger.info("API connection status endpoint called")
+    api_online = await check_lemonade_server()
+    logger.info(f"API online check result: {api_online}")
+
+    result = {
+        "api_online": api_online,
+    }
+    logger.info(f"Returning API connection status: {result}")
+    return JSONResponse(result)
+
+
+@app.get("/api/model-installation-status")
+async def model_installation_status():
+    """Check if required model is installed ONLY."""
+    logger.info("Model installation status endpoint called")
+    model_status = await check_required_model()
+    logger.info(f"Model check result: {model_status}")
+
+    result = {
+        "model_installed": model_status["installed"],
+        "model_name": model_status["model_name"],
+    }
+    logger.info(f"Returning model installation status: {result}")
+    return JSONResponse(result)
+
+
+@app.get("/api/model-loading-status")
+async def model_loading_status():
+    """Check if required model is loaded ONLY."""
+    logger.info("Model loading status endpoint called")
+    model_loaded_status = await check_model_loaded()
+    logger.info(f"Model loaded check result: {model_loaded_status}")
+
+    result = {
+        "model_loaded": model_loaded_status["loaded"],
+        "model_name": model_loaded_status["model_name"],
+        "current_model": model_loaded_status["current_model"],
+    }
+    logger.info(f"Returning model loading status: {result}")
+    return JSONResponse(result)
+
+
+@app.post("/api/install-server")
+async def install_server():
+    """Download and install lemonade-server."""
+    logger.info("Install server endpoint called")
+    result = await download_and_install_lemonade_server()
+    logger.info(f"Install result: {result}")
+    return JSONResponse(result)
+
+
+@app.post("/api/start-server")
+async def start_server():
+    """Start lemonade-server if installed."""
+    logger.info("Start server endpoint called")
+    result = await start_lemonade_server()
+    logger.info(f"Start server result: {result}")
+    return JSONResponse(result)
+
+
+@app.post("/api/install-model")
+async def install_model():
+    """Install the required model."""
+    logger.info("Install model endpoint called")
+    result = await install_required_model()
+    logger.info(f"Install model result: {result}")
+    return JSONResponse(result)
+
+
+@app.post("/api/load-model")
+async def load_model():
+    """Load the required model."""
+    logger.info("Load model endpoint called")
+    result = await load_required_model()
+    logger.info(f"Load model result: {result}")
+    return JSONResponse(result)
 
 
 @app.post("/api/create-game")
@@ -538,6 +1138,10 @@ async def delete_game_endpoint(game_id: str):
     if game_id not in GAME_METADATA:
         raise HTTPException(status_code=404, detail="Game not found")
 
+    # Prevent deletion of built-in games
+    if game_id in BUILTIN_GAMES:
+        raise HTTPException(status_code=403, detail="Cannot delete built-in games")
+
     # Stop the game if it's running
     if game_id in RUNNING_GAMES:
         stop_game(game_id)
@@ -560,7 +1164,15 @@ async def get_game_metadata(game_id: str):
     if game_id not in GAME_METADATA:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    return JSONResponse(GAME_METADATA[game_id])
+    metadata = GAME_METADATA[game_id].copy()
+
+    # For built-in games, hide sensitive information
+    if game_id in BUILTIN_GAMES:
+        # Remove prompt and other sensitive data for built-in games
+        metadata.pop("prompt", None)
+        metadata["builtin"] = True
+
+    return JSONResponse(metadata)
 
 
 @app.post("/api/open-game-file/{game_id}")
@@ -568,6 +1180,12 @@ async def open_game_file(game_id: str):
     """Open the Python file for a game in the default editor."""
     if game_id not in GAME_METADATA:
         raise HTTPException(status_code=404, detail="Game not found")
+
+    # Prevent opening built-in game files
+    if game_id in BUILTIN_GAMES:
+        raise HTTPException(
+            status_code=403, detail="Cannot view source code of built-in games"
+        )
 
     game_file = GAMES_DIR / f"{game_id}.py"
     if not game_file.exists():

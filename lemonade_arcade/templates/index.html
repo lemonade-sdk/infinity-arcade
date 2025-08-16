@@ -6,7 +6,6 @@
     <title>Lemonade Arcade</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/marked@9.1.0/marked.min.js"></script>
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>
     // Configure MathJax
@@ -57,15 +56,122 @@
         </div>
         
         <div class="main-content">
-            <div class="game-library">
-                <div class="library-title">Game Library</div>
-                <div class="spinner" id="gameSpinner">
-                    <div class="spinner-circle"></div>
-                    <div class="status-text" id="spinnerStatus">Generating game...</div>
+            <!-- New User Experience - Full Screen Setup -->
+            <div class="setup-screen" id="setupScreen">
+                <div class="setup-container">
+                    <div class="setup-header">
+                        <div class="setup-title">
+                            <pre>██╗     ███████╗███╗   ███╗ ██████╗ ███╗   ██╗ █████╗ ██████╗ ███████╗
+██║     ██╔════╝████╗ ████║██╔═══██╗████╗  ██║██╔══██╗██╔══██╗██╔════╝
+██║     █████╗  ██╔████╔██║██║   ██║██╔██╗ ██║███████║██║  ██║█████╗  
+██║     ██╔══╝  ██║╚██╔╝██║██║   ██║██║╚██╗██║██╔══██║██║  ██║██╔══╝  
+███████╗███████╗██║ ╚═╝ ██║╚██████╔╝██║ ╚████║██║  ██║██████╔╝███████╗
+╚══════╝╚══════╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚═════╝ ╚══════╝
+
+ █████╗ ██████╗  ██████╗ █████╗ ██████╗ ███████╗
+██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝
+███████║██████╔╝██║     ███████║██║  ██║█████╗  
+██╔══██║██╔══██╗██║     ██╔══██║██║  ██║██╔══╝  
+██║  ██║██║  ██║╚██████╗██║  ██║██████╔╝███████╗
+╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝ ╚══════╝</pre>
+                        </div>
+                        <div class="setup-subtitle">Let's get you set up to create amazing games with AI</div>
+                    </div>
+                    
+                    <div class="setup-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="progress-text" id="progressText">Checking system...</div>
+                    </div>
+                    
+                    <ul class="setup-checklist">
+                        <li class="checklist-item" id="checkInstalled">
+                            <div class="check-icon" id="iconInstalled">[...]</div>
+                            <div class="check-content">
+                                <div class="check-title">Lemonade Server Installation</div>
+                                <div class="check-description" id="descInstalled">Checking if Lemonade Server is installed...</div>
+                            </div>
+                            <div class="check-action">
+                                <button class="action-btn" id="btnInstalled" style="display: none;">Install Now</button>
+                            </div>
+                        </li>
+                        
+                        <li class="checklist-item" id="checkRunning">
+                            <div class="check-icon" id="iconRunning">[...]</div>
+                            <div class="check-content">
+                                <div class="check-title">Server Status</div>
+                                <div class="check-description" id="descRunning">Checking if Lemonade Server is running...</div>
+                            </div>
+                            <div class="check-action">
+                                <button class="action-btn" id="btnRunning" style="display: none;">Start Server</button>
+                            </div>
+                        </li>
+                        
+                        <li class="checklist-item" id="checkConnection">
+                            <div class="check-icon" id="iconConnection">[...]</div>
+                            <div class="check-content">
+                                <div class="check-title">API Connection</div>
+                                <div class="check-description" id="descConnection">Checking connection to Lemonade Server...</div>
+                            </div>
+                            <div class="check-action">
+                                <button class="action-btn" id="btnConnection" style="display: none;">Retry Connection</button>
+                            </div>
+                        </li>
+                        
+                        <li class="checklist-item" id="checkModel">
+                            <div class="check-icon" id="iconModel">[...]</div>
+                            <div class="check-content">
+                                <div class="check-title">Required Model</div>
+                                <div class="check-description" id="descModel">Checking for Qwen3-Coder-30B-A3B-Instruct-GGUF model...</div>
+                            </div>
+                            <div class="check-action">
+                                <button class="action-btn" id="btnModel" style="display: none;">Install Model (18.6 GB)</button>
+                            </div>
+                        </li>
+                        
+                        <!-- Built-in Games Section (shown during model download) -->
+                        <div class="builtin-games-section" id="builtinGamesSection" style="display: none;">
+                            <div class="builtin-games-header">
+                                <div class="builtin-games-title">🎮 Play While You Wait</div>
+                                <div class="builtin-games-subtitle">Try these built-in games while the model downloads</div>
+                            </div>
+                            <div class="builtin-games-grid" id="builtinGamesGrid">
+                                <!-- Built-in games will be populated here -->
+                            </div>
+                        </div>
+                        
+                        <li class="checklist-item" id="checkLoaded">
+                            <div class="check-icon" id="iconLoaded">[...]</div>
+                            <div class="check-content">
+                                <div class="check-title">Model Loading</div>
+                                <div class="check-description" id="descLoaded">Checking if model is loaded...</div>
+                            </div>
+                            <div class="check-action">
+                                <button class="action-btn" id="btnLoaded" style="display: none;">Load Model</button>
+                            </div>
+                        </li>
+                    </ul>
+                    
+                    <div class="setup-actions">
+                        <button class="lets-go-btn" id="letsGoBtn" style="display: none;">LET'S GO! >>></button>
+                        <button class="retry-btn" id="retryBtn" style="display: none;">Retry Setup</button>
+                    </div>
                 </div>
-                <div class="games-grid" id="gamesGrid">
-                    <div class="empty-library">
-                        No games yet. Create your first game below!
+            </div>
+            
+            <!-- Main Game Interface (hidden until setup complete) -->
+            <div class="game-interface" id="gameInterface" style="display: none;">
+                <div class="game-library">
+                    <div class="library-title">Game Library</div>
+                    <div class="spinner" id="gameSpinner">
+                        <div class="spinner-circle"></div>
+                        <div class="status-text" id="spinnerStatus">Generating game...</div>
+                    </div>
+                    <div class="games-grid" id="gamesGrid">
+                        <div class="empty-library">
+                            No games yet. Create your first game below!
+                        </div>
                     </div>
                 </div>
             </div>
@@ -76,7 +182,7 @@
             <div class="llm-output" id="llmOutput">Ready to generate games...</div>
         </div>
         
-        <div class="input-area">
+        <div class="input-area" id="inputArea" style="display: none;">
             <select class="model-select" id="modelSelect">
                 <option>Loading models...</option>
             </select>
