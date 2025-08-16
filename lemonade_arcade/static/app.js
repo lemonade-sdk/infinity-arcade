@@ -234,9 +234,43 @@ class SetupManager {
                 this.checks.running.completed = true;
                 this.updateCheckStatus('running', 'success', 'Lemonade Server is running');
             } else {
-                this.updateCheckStatus('running', 'error', 
-                    'Lemonade Server failed to start automatically',
-                    true, 'Retry', () => this.startSetup());
+                // Server is not running, but it might be starting up
+                // Wait and retry with multiple attempts before giving up
+                this.updateCheckStatus('running', 'pending', 'Server starting up, waiting for it to be ready...');
+                
+                let attempts = 0;
+                const maxAttempts = 15; // 30 seconds total (15 attempts * 2 seconds each)
+                let serverStarted = false;
+                
+                while (attempts < maxAttempts && !serverStarted) {
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+                    attempts++;
+                    
+                    try {
+                        const retryResponse = await fetch('/api/server-running-status');
+                        const retryStatus = await retryResponse.json();
+                        
+                        if (retryStatus.running) {
+                            serverStarted = true;
+                            this.checks.running.completed = true;
+                            this.updateCheckStatus('running', 'success', 'Lemonade Server is running');
+                            break;
+                        } else {
+                            this.updateCheckStatus('running', 'pending', 
+                                `Server starting up, waiting... (${attempts}/${maxAttempts})`);
+                        }
+                    } catch (retryError) {
+                        console.log(`Server check attempt ${attempts} failed:`, retryError.message);
+                        this.updateCheckStatus('running', 'pending', 
+                            `Server starting up, waiting... (${attempts}/${maxAttempts})`);
+                    }
+                }
+                
+                if (!serverStarted) {
+                    this.updateCheckStatus('running', 'error', 
+                        'Lemonade Server failed to start within 30 seconds',
+                        true, 'Retry', () => this.startSetup());
+                }
             }
         } catch (error) {
             console.error('Failed to check server status:', error);
