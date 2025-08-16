@@ -44,16 +44,22 @@ def get_resource_path(relative_path):
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
+        # In PyInstaller bundle, resources are under lemonade_arcade/
+        if relative_path in ["static", "templates"]:
+            return os.path.join(base_path, "lemonade_arcade", relative_path)
+        else:
+            return os.path.join(base_path, relative_path)
     except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+        # Use the directory of this file as the base path for development
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base_path, relative_path)
 
 
 app = FastAPI(title="Lemonade Arcade", version="0.1.0")
 
 # Set up static files and templates
-STATIC_DIR = get_resource_path("lemonade_arcade/static")
-TEMPLATES_DIR = get_resource_path("lemonade_arcade/templates")
+STATIC_DIR = get_resource_path("static")
+TEMPLATES_DIR = get_resource_path("templates")
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
