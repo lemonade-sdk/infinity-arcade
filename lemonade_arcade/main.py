@@ -288,18 +288,76 @@ async def start_lemonade_server():
     for i, cmd in enumerate(commands_to_try):
         try:
             logger.info(f"Trying start command {i+1}: {cmd}")
+
+            # Create temp files to capture output for debugging
+            import tempfile
+
+            stdout_file = tempfile.NamedTemporaryFile(
+                mode="w+", delete=False, suffix=".log"
+            )
+            stderr_file = tempfile.NamedTemporaryFile(
+                mode="w+", delete=False, suffix=".log"
+            )
+
             # Start the server in the background without waiting for it
             process = subprocess.Popen(
                 cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=stdout_file,
+                stderr=stderr_file,
                 creationflags=(
                     subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
                 ),
                 shell=True,  # Use shell=True to help with PATH resolution
             )
-            logger.info(f"Successfully started lemonade-server with PID: {process.pid}")
-            return {"success": True, "message": "Server start command issued"}
+
+            # Give the process a moment to start and check if it's still running
+            import time
+
+            time.sleep(1)
+
+            # Check if process is still alive
+            if process.poll() is None:
+                logger.info(
+                    f"Successfully started lemonade-server with PID: {process.pid}"
+                )
+
+                # Close temp files
+                stdout_file.close()
+                stderr_file.close()
+
+                return {"success": True, "message": "Server start command issued"}
+            else:
+                # Process died immediately, check error output
+                stdout_file.close()
+                stderr_file.close()
+
+                # Read the error output
+                try:
+                    with open(stderr_file.name, "r") as f:
+                        stderr_content = f.read().strip()
+                    with open(stdout_file.name, "r") as f:
+                        stdout_content = f.read().strip()
+
+                    logger.error(
+                        f"Command {i+1} failed immediately. Return code: {process.returncode}"
+                    )
+                    if stderr_content:
+                        logger.error(f"Stderr: {stderr_content}")
+                    if stdout_content:
+                        logger.info(f"Stdout: {stdout_content}")
+
+                    # Clean up temp files
+                    try:
+                        os.unlink(stdout_file.name)
+                        os.unlink(stderr_file.name)
+                    except:
+                        pass
+
+                except Exception as read_error:
+                    logger.error(f"Could not read process output: {read_error}")
+
+                continue
+
         except FileNotFoundError as e:
             logger.info(f"Start command {i+1} not found: {e}")
             continue
@@ -732,32 +790,93 @@ async def get_games():
     return JSONResponse(GAME_METADATA)
 
 
-@app.get("/api/setup-status")
-async def setup_status():
-    """Check lemonade-server installation and running status."""
-    logger.info("Setup status endpoint called")
+@app.get("/api/installation-status")
+async def installation_status():
+    """Check lemonade-server installation status ONLY."""
+    logger.info("Installation status endpoint called")
     version_info = await check_lemonade_server_version()
     logger.info(f"Version check result: {version_info}")
-    is_running = await check_lemonade_server_running()
-    logger.info(f"Running check result: {is_running}")
-    api_online = await check_lemonade_server()
-    logger.info(f"API online check result: {api_online}")
-    model_status = await check_required_model()
-    logger.info(f"Model check result: {model_status}")
-    model_loaded_status = await check_model_loaded()
-    logger.info(f"Model loaded check result: {model_loaded_status}")
 
     result = {
         "installed": version_info["installed"],
         "version": version_info["version"],
         "compatible": version_info["compatible"],
+    }
+    logger.info(f"Returning installation status: {result}")
+    return JSONResponse(result)
+
+
+@app.get("/api/server-running-status")
+async def server_running_status():
+    """Check if lemonade-server is running ONLY, and auto-start if needed."""
+    logger.info("Server running status endpoint called")
+    is_running = await check_lemonade_server_running()
+    logger.info(f"Running check result: {is_running}")
+
+    # If server is not running, try to start it automatically
+    if not is_running:
+        logger.info("Server not running, attempting to start automatically...")
+        start_result = await start_lemonade_server()
+        logger.info(f"Auto-start result: {start_result}")
+
+        if start_result["success"]:
+            # Give it a moment to start up
+            import asyncio
+
+            await asyncio.sleep(2)
+            # Check again
+            is_running = await check_lemonade_server_running()
+            logger.info(f"Running check after auto-start: {is_running}")
+
+    result = {
         "running": is_running,
+    }
+    logger.info(f"Returning server running status: {result}")
+    return JSONResponse(result)
+
+
+@app.get("/api/api-connection-status")
+async def api_connection_status():
+    """Check API connection status ONLY."""
+    logger.info("API connection status endpoint called")
+    api_online = await check_lemonade_server()
+    logger.info(f"API online check result: {api_online}")
+
+    result = {
         "api_online": api_online,
+    }
+    logger.info(f"Returning API connection status: {result}")
+    return JSONResponse(result)
+
+
+@app.get("/api/model-installation-status")
+async def model_installation_status():
+    """Check if required model is installed ONLY."""
+    logger.info("Model installation status endpoint called")
+    model_status = await check_required_model()
+    logger.info(f"Model check result: {model_status}")
+
+    result = {
         "model_installed": model_status["installed"],
         "model_name": model_status["model_name"],
-        "model_loaded": model_loaded_status["loaded"],
     }
-    logger.info(f"Returning setup status: {result}")
+    logger.info(f"Returning model installation status: {result}")
+    return JSONResponse(result)
+
+
+@app.get("/api/model-loading-status")
+async def model_loading_status():
+    """Check if required model is loaded ONLY."""
+    logger.info("Model loading status endpoint called")
+    model_loaded_status = await check_model_loaded()
+    logger.info(f"Model loaded check result: {model_loaded_status}")
+
+    result = {
+        "model_loaded": model_loaded_status["loaded"],
+        "model_name": model_loaded_status["model_name"],
+        "current_model": model_loaded_status["current_model"],
+    }
+    logger.info(f"Returning model loading status: {result}")
     return JSONResponse(result)
 
 

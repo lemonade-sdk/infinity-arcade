@@ -145,33 +145,186 @@ class SetupManager {
         
         this.updateProgress();
         
-        // Check 1: Installation
-        await this.checkInstallation();
-        
-        // Check 2: Server Running (only if installed)
-        if (this.checks.installed.completed) {
-            await this.checkServerRunning();
-        }
-        
-        // Check 3: API Connection (only if running)
-        if (this.checks.running.completed) {
-            await this.checkConnection();
-        }
-        
-        // Check 4: Model Installation (only if API connected)
-        if (this.checks.connection.completed) {
-            await this.checkModel();
-        }
-        
-        // Note: checkModelLoaded() is called automatically by checkModel() when model is installed
-        // or by installModel() after successful installation
-        
-        // If not all checks passed, show retry button
-        if (!this.checks.installed.completed || !this.checks.running.completed || !this.checks.connection.completed || !this.checks.model.completed || !this.checks.loaded.completed) {
+        // Step 1: Check and complete installation
+        console.log('Step 1: Checking installation...');
+        await this.doInstallationStep();
+        if (!this.checks.installed.completed) {
+            setupInProgress = false;
             this.showRetryButton();
+            return;
         }
         
+        // Step 2: Check and start server if needed
+        console.log('Step 2: Checking server...');
+        await this.doServerStep();
+        if (!this.checks.running.completed) {
+            setupInProgress = false;
+            this.showRetryButton();
+            return;
+        }
+        
+        // Step 3: Check connection
+        console.log('Step 3: Checking connection...');
+        await this.doConnectionStep();
+        if (!this.checks.connection.completed) {
+            setupInProgress = false;
+            this.showRetryButton();
+            return;
+        }
+        
+        // Step 4: Check and install model if needed
+        console.log('Step 4: Checking model...');
+        await this.doModelStep();
+        if (!this.checks.model.completed) {
+            setupInProgress = false;
+            this.showRetryButton();
+            return;
+        }
+        
+        // Step 5: Check and load model if needed
+        console.log('Step 5: Checking model loaded...');
+        await this.doModelLoadedStep();
+        if (!this.checks.loaded.completed) {
+            setupInProgress = false;
+            this.showRetryButton();
+            return;
+        }
+        
+        console.log('Setup completed successfully!');
         setupInProgress = false;
+    }
+
+    async doInstallationStep() {
+        this.updateCheckStatus('installed', 'pending', 'Checking if Lemonade Server is installed...');
+        
+        try {
+            const response = await fetch('/api/installation-status');
+            const status = await response.json();
+            
+            if (status.installed && status.compatible) {
+                this.checks.installed.completed = true;
+                this.updateCheckStatus('installed', 'success', `Lemonade Server v${status.version} is installed and compatible`);
+            } else if (status.installed && !status.compatible) {
+                this.updateCheckStatus('installed', 'error', 
+                    `Found version ${status.version}, but version 8.1.3+ is required`,
+                    true, 'Update Now', () => this.installServer());
+                return; // Stop here, user needs to take action
+            } else {
+                this.updateCheckStatus('installed', 'error', 
+                    'Lemonade Server is not installed',
+                    true, 'Install Now', () => this.installServer());
+                return; // Stop here, user needs to take action
+            }
+        } catch (error) {
+            console.error('Failed to check installation:', error);
+            this.updateCheckStatus('installed', 'error', 
+                'Failed to check installation status',
+                true, 'Retry', () => this.startSetup());
+        }
+    }
+
+    async doServerStep() {
+        this.updateCheckStatus('running', 'pending', 'Checking if Lemonade Server is running...');
+        
+        try {
+            const response = await fetch('/api/server-running-status');
+            const status = await response.json();
+            
+            if (status.running) {
+                this.checks.running.completed = true;
+                this.updateCheckStatus('running', 'success', 'Lemonade Server is running');
+            } else {
+                this.updateCheckStatus('running', 'error', 
+                    'Lemonade Server failed to start automatically',
+                    true, 'Retry', () => this.startSetup());
+            }
+        } catch (error) {
+            console.error('Failed to check server status:', error);
+            this.updateCheckStatus('running', 'error', 
+                'Failed to check server status',
+                true, 'Retry', () => this.startSetup());
+        }
+    }
+
+    async doConnectionStep() {
+        this.updateCheckStatus('connection', 'pending', 'Testing connection to Lemonade Server...');
+        
+        try {
+            const response = await fetch('/api/api-connection-status');
+            const status = await response.json();
+            
+            if (status.api_online) {
+                this.checks.connection.completed = true;
+                this.updateCheckStatus('connection', 'success', 'Successfully connected to Lemonade Server API');
+            } else {
+                this.updateCheckStatus('connection', 'error', 
+                    'Cannot connect to Lemonade Server API',
+                    true, 'Retry', () => this.startSetup());
+            }
+        } catch (error) {
+            console.error('Failed to check API connection:', error);
+            this.updateCheckStatus('connection', 'error', 
+                'Failed to test API connection',
+                true, 'Retry', () => this.startSetup());
+        }
+    }
+
+    async doModelStep() {
+        this.updateCheckStatus('model', 'pending', 'Checking for required model...');
+        
+        try {
+            const response = await fetch('/api/model-installation-status');
+            const status = await response.json();
+            
+            if (status.model_installed) {
+                this.checks.model.completed = true;
+                this.updateCheckStatus('model', 'success', `Required model ${status.model_name} is installed`);
+            } else {
+                this.updateCheckStatus('model', 'error', 
+                    `Required model ${status.model_name} is not installed`,
+                    true, 'Install Model (18.6 GB)', () => this.installModel());
+                return; // Stop here, user needs to take action
+            }
+        } catch (error) {
+            console.error('Model check failed:', error);
+            this.updateCheckStatus('model', 'error', 
+                'Failed to check model status',
+                true, 'Retry', () => this.startSetup());
+        }
+    }
+
+    async doModelLoadedStep() {
+        this.updateCheckStatus('loaded', 'pending', 'Checking if model is loaded...');
+        
+        try {
+            const response = await fetch('/api/model-loading-status');
+            const status = await response.json();
+            
+            if (status.model_loaded) {
+                this.checks.loaded.completed = true;
+                this.updateCheckStatus('loaded', 'success', 'Required model is loaded and ready');
+            } else {
+                this.updateCheckStatus('loaded', 'pending', 'Required model is not loaded. Loading automatically...');
+                
+                // Try to load the model
+                const loadResponse = await fetch('/api/load-model', { method: 'POST' });
+                const loadResult = await loadResponse.json();
+                
+                if (loadResult.success) {
+                    this.checks.loaded.completed = true;
+                    this.updateCheckStatus('loaded', 'success', 'Required model loaded successfully');
+                } else {
+                    this.updateCheckStatus('loaded', 'error', 
+                        `Failed to load model: ${loadResult.message}`,
+                        true, 'Retry Load', () => this.startSetup());
+                }
+            }
+        } catch (error) {
+            console.error('Model load check failed:', error);
+            this.updateCheckStatus('loaded', 'error', 
+                'Failed to check if model is loaded',
+                true, 'Retry', () => this.startSetup());
+        }
     }
 
     async checkInstallation() {
@@ -179,20 +332,10 @@ class SetupManager {
         this.updateCheckStatus('installed', 'pending', 'Checking if Lemonade Server is installed...');
         
         try {
-            const response = await fetch('/api/setup-status');
+            const response = await fetch('/api/installation-status');
             const status = await response.json();
             
-            if (status.installed && status.compatible) {
-                this.updateCheckStatus('installed', 'success', `Lemonade Server v${status.version} is installed and compatible`);
-            } else if (status.installed && !status.compatible) {
-                this.updateCheckStatus('installed', 'error', 
-                    `Found version ${status.version}, but version 8.1.3+ is required`,
-                    true, 'Update Now', () => this.installServer());
-            } else {
-                this.updateCheckStatus('installed', 'error', 
-                    'Lemonade Server is not installed',
-                    true, 'Install Now', () => this.installServer());
-            }
+            await this.processInstallationStatus(status);
         } catch (error) {
             console.error('Failed to check installation:', error);
             this.updateCheckStatus('installed', 'error', 
@@ -206,16 +349,10 @@ class SetupManager {
         this.updateCheckStatus('running', 'pending', 'Checking if Lemonade Server is running...');
         
         try {
-            const response = await fetch('/api/setup-status');
+            const response = await fetch('/api/server-running-status');
             const status = await response.json();
             
-            if (status.running) {
-                this.updateCheckStatus('running', 'success', 'Lemonade Server is running');
-            } else {
-                this.updateCheckStatus('running', 'pending', 'Lemonade Server is not running. Starting automatically...');
-                // Automatically start the server instead of asking the user
-                await this.startServer();
-            }
+            await this.processRunningStatus(status);
         } catch (error) {
             console.error('Failed to check server status:', error);
             this.updateCheckStatus('running', 'error', 
@@ -229,20 +366,16 @@ class SetupManager {
         this.updateCheckStatus('connection', 'pending', 'Testing connection to Lemonade Server...');
         
         try {
-            const response = await fetch('/api/setup-status');
+            const response = await fetch('/api/api-connection-status');
             const status = await response.json();
             
-            if (status.api_online) {
-                this.updateCheckStatus('connection', 'success', 'Successfully connected to Lemonade Server API');
-                
-                // Automatically proceed to checking the model
+            await this.processConnectionStatus(status);
+            
+            // Automatically proceed to checking the model if connection is successful
+            if (this.checks.connection.completed) {
                 setTimeout(() => {
                     this.checkModel();
                 }, 1000);
-            } else {
-                this.updateCheckStatus('connection', 'error', 
-                    'Cannot connect to Lemonade Server API',
-                    true, 'Retry', () => this.checkConnection());
             }
         } catch (error) {
             console.error('Failed to check API connection:', error);
@@ -268,9 +401,9 @@ class SetupManager {
             if (result.success) {
                 this.updateCheckStatus('installed', 'success', 'Lemonade Server installed successfully!');
                 
-                // Wait a moment then automatically check the next step
+                // Wait a moment then restart the setup process
                 setTimeout(() => {
-                    this.checkServerRunning();
+                    this.startSetup();
                 }, 2000);
             } else {
                 this.updateCheckStatus('installed', 'error', 
@@ -324,17 +457,12 @@ class SetupManager {
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             try {
-                const response = await fetch('/api/setup-status');
+                const response = await fetch('/api/server-running-status');
                 const status = await response.json();
                 
                 if (status.running) {
                     this.updateCheckStatus('running', 'success', 'Lemonade Server is running');
-                    
-                    // Now check API connection
-                    setTimeout(() => {
-                        this.checkConnection();
-                    }, 1000);
-                    return;
+                    return; // Just return, the main setup flow will continue
                 }
             } catch (error) {
                 console.log('Still waiting for server...');
@@ -343,9 +471,11 @@ class SetupManager {
             attempts++;
         }
         
+        // If we get here, server didn't start in time
         this.updateCheckStatus('running', 'error', 
             'Server started but is taking too long to respond',
-            true, 'Check Again', () => this.checkServerRunning());
+            true, 'Retry', () => this.startSetup());
+        throw new Error('Server startup timeout');
     }
 
     async checkModel() {
@@ -355,21 +485,16 @@ class SetupManager {
         this.updateCheckStatus('model', 'pending', 'Checking for required model...');
         
         try {
-            const response = await fetch('/api/setup-status');
+            const response = await fetch('/api/model-installation-status');
             const status = await response.json();
             
-            if (status.model_installed) {
-                this.updateCheckStatus('model', 'success', 
-                    `Required model ${status.model_name} is installed`);
-                
-                // Automatically proceed to checking if the model is loaded
+            await this.processModelStatus(status);
+            
+            // Automatically proceed to checking if model is loaded if model is installed
+            if (this.checks.model.completed) {
                 setTimeout(() => {
                     this.checkModelLoaded();
                 }, 1000);
-            } else {
-                this.updateCheckStatus('model', 'error', 
-                    `${status.model_name} needs to be installed (18.6 GB download)`,
-                    true, 'Install Model (18.6 GB)', () => this.installModel());
             }
         } catch (error) {
             console.error('Model check failed:', error);
@@ -391,7 +516,7 @@ class SetupManager {
         
         this.updateCheckStatus('model', 'pending', 'Installing required model (18.6 GB - this may take several minutes)...');
         
-        // Always show built-in games section during download, regardless of how installModel was called
+        // Always show built-in games section during download
         this.showBuiltinGamesSection();
         
         try {
@@ -413,9 +538,9 @@ class SetupManager {
                 // Hide built-in games section when download completes
                 this.hideBuiltinGamesSection();
                 
-                // Automatically proceed to loading the model
+                // Restart setup process to continue to next step
                 setTimeout(() => {
-                    this.checkModelLoaded();
+                    this.startSetup();
                 }, 2000);
             } else {
                 this.updateCheckStatus('model', 'error', 
@@ -449,18 +574,10 @@ class SetupManager {
         this.updateCheckStatus('loaded', 'pending', 'Checking if model is loaded...');
         
         try {
-            const response = await fetch('/api/setup-status');
+            const response = await fetch('/api/model-loading-status');
             const status = await response.json();
             
-            if (status.model_loaded) {
-                this.updateCheckStatus('loaded', 'success', 
-                    `Model ${status.model_name} is loaded and ready`);
-            } else {
-                this.updateCheckStatus('loaded', 'pending', 
-                    `Model ${status.model_name} is not loaded. Loading automatically...`);
-                // Automatically load the model instead of asking the user
-                await this.loadModel();
-            }
+            await this.processModelLoadedStatus(status);
         } catch (error) {
             console.error('Model load check failed:', error);
             this.updateCheckStatus('loaded', 'error', 
