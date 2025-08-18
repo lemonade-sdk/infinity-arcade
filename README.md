@@ -28,7 +28,7 @@
   </a>
 </p>
 
-Use your overpowered GPU run AI that produces creative retro-style games! Enter your prompt, and the playable game pops open in minutes.
+Use your overpowered GPU to run AI that produces creative retro-style games! Enter your prompt and the playable game pops open in minutes.
 
 Push your imagination to the limit, it's 100% free and local.
 
@@ -48,7 +48,7 @@ Lemonade Arcade uses a 30 billion parameter LLM to generate games, which require
 
 <p align="center">Windows: click this:</p>
 <p align="center">
-   <img src=https://github.com/lemonade-sdk/assets/blob/main/arcade/exe_icon.png?raw=true alt="Arcade Quick Start"/>
+   <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/download/v0.1.0/LemonadeArcade-v0.1.0.exe"><img src=https://github.com/lemonade-sdk/assets/blob/main/arcade/exe_icon.png?raw=true alt="Arcade Quick Start"/></a>
 </p>
 
 <p align="center">
@@ -160,9 +160,10 @@ Here are some example prompts that work well:
 ## Contributing
 
 Contributions are welcome! Feel free to:
+- Share interesting game prompts and results by opening an issue!
 - Report bugs or request features via GitHub issues.
 - Submit pull requests for improvements.
-- Share interesting game prompts and results.
+
 
 ## License and Attribution
 
