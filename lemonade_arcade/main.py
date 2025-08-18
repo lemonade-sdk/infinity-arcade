@@ -141,7 +141,9 @@ def find_lemonade_server_paths():
 
     # Check current PATH for lemonade_server/bin directories
     current_path = os.environ.get("PATH", "")
-    for path_entry in current_path.split(";"):
+    # Use the correct path separator for the platform
+    path_separator = ";" if sys.platform == "win32" else ":"
+    for path_entry in current_path.split(path_separator):
         path_entry = path_entry.strip()
         if "lemonade_server" in path_entry.lower() and "bin" in path_entry.lower():
             if os.path.exists(path_entry):
@@ -198,123 +200,107 @@ def refresh_environment():
         logger.warning(f"Failed to refresh environment: {e}")
 
 
-async def check_lemonade_sdk_available():
-    """Check if lemonade-sdk package is available in the current environment."""
-    logger.info("Checking for lemonade-sdk package...")
-    try:
-        result = subprocess.run(
-            [sys.executable, "-c", "import lemonade_server; print('available')"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        is_available = result.returncode == 0 and "available" in result.stdout
-        logger.info(f"lemonade-sdk package available: {is_available}")
-        return is_available
-    except Exception as e:
-        logger.info(f"lemonade-sdk package check failed: {e}")
-        return False
-
-
-async def check_lemonade_server_version():
-    """Check if lemonade-server is installed and get its version."""
+async def execute_lemonade_server_command(args: List[str], timeout: int = 10, use_popen: bool = False, stdout_file=None, stderr_file=None):
+    """
+    Execute a lemonade-server command with the appropriate binary/method.
+    
+    Args:
+        args: Command arguments (e.g., ["--version"], ["status"], ["serve"])
+        timeout: Timeout in seconds for subprocess.run (ignored for Popen)
+        use_popen: If True, use Popen for background processes, otherwise use run
+        stdout_file: File object for stdout (only used with use_popen=True)
+        stderr_file: File object for stderr (only used with use_popen=True)
+        
+    Returns:
+        For subprocess.run: subprocess.CompletedProcess
+        For subprocess.Popen: subprocess.Popen instance
+        Returns None if all commands failed
+    """
     global SERVER_COMMAND
-    logger.info("Checking lemonade-server version...")
+    logger.info(f"Executing lemonade-server command with args: {args}")
 
     # If we already know which command to use, use only that one
     if SERVER_COMMAND:
-        commands_to_try = [SERVER_COMMAND + ["--version"]]
+        commands_to_try = [SERVER_COMMAND + args]
     else:
-        # Try different ways to find lemonade-server
+        # Try different ways to find lemonade-server based on platform
         commands_to_try = []
 
-        # If not in PyInstaller, try lemonade-server-dev first
-        if not is_pyinstaller_environment():
-            commands_to_try.extend(
-                [
-                    ["lemonade-server-dev", "--version"],
-                ]
-            )
+        if sys.platform == "win32":
+            # Windows: Try multiple options including PyInstaller and pip installs
+            if not is_pyinstaller_environment():
+                commands_to_try.append(["lemonade-server-dev"] + args)
+            
+            # Windows traditional commands
+            commands_to_try.extend([
+                ["lemonade-server"] + args,
+                ["lemonade-server.bat"] + args,
+            ])
 
-        # Always add traditional commands and dynamic paths
-        commands_to_try.extend(
-            [
-                ["lemonade-server", "--version"],
-                ["lemonade-server.bat", "--version"],
-            ]
-        )
-
-        # Add dynamically discovered paths
-        for bin_path in find_lemonade_server_paths():
-            # Try both .exe and .bat in each discovered path
-            commands_to_try.extend(
-                [
-                    [os.path.join(bin_path, "lemonade-server.exe"), "--version"],
-                    [os.path.join(bin_path, "lemonade-server.bat"), "--version"],
-                ]
-            )
+            # Add dynamically discovered Windows paths
+            for bin_path in find_lemonade_server_paths():
+                commands_to_try.extend([
+                    [os.path.join(bin_path, "lemonade-server.exe")] + args,
+                    [os.path.join(bin_path, "lemonade-server.bat")] + args,
+                ])
+        else:
+            # Linux/Unix: Only lemonade-server-dev works (from pip install lemonade-sdk)
+            commands_to_try.append(["lemonade-server-dev"] + args)
 
     for i, cmd in enumerate(commands_to_try):
         try:
             logger.info(f"Trying command {i+1}: {cmd}")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=10,
-                shell=True,  # Use shell=True to help with PATH resolution
-            )
-            logger.info(f"Command {i+1} returned code: {result.returncode}")
-            logger.info(f"Command {i+1} stdout: '{result.stdout}'")
-            logger.info(f"Command {i+1} stderr: '{result.stderr}'")
+            
+            if use_popen:
+                # For background processes (like server start)
+                # Convert command list to string for shell=True
+                cmd_str = " ".join(cmd)
+                process = subprocess.Popen(
+                    cmd_str,
+                    stdout=stdout_file or subprocess.PIPE,
+                    stderr=stderr_file or subprocess.PIPE,
+                    creationflags=(
+                        subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                    ),
+                    shell=True,  # Use shell=True to help with PATH resolution
+                )
+                
+                # Store the successful command for future use
+                if not SERVER_COMMAND:
+                    SERVER_COMMAND = cmd[:-len(args)]  # Remove the args to get base command
+                    logger.info(f"Stored server command: {SERVER_COMMAND}")
+                
+                return process
+            else:
+                # For regular commands with output
+                # Convert command list to string for shell=True
+                cmd_str = " ".join(cmd)
+                result = subprocess.run(
+                    cmd_str,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    shell=True,  # Use shell=True to help with PATH resolution
+                )
+                logger.info(f"Command {i+1} returned code: {result.returncode}")
+                logger.info(f"Command {i+1} stdout: '{result.stdout}'")
+                logger.info(f"Command {i+1} stderr: '{result.stderr}'")
 
-            if result.returncode == 0:
-                version_line = result.stdout.strip()
-                logger.info(f"Raw version output: '{version_line}'")
-
-                # Extract version number (format might be "lemonade-server 8.1.3" or just "8.1.3")
-                import re
-
-                version_match = re.search(r"(\d+\.\d+\.\d+)", version_line)
-                if version_match:
-                    version = version_match.group(1)
-                    logger.info(f"Extracted version: {version}")
-
-                    # Check if version >= 8.1.3
-                    version_parts = [int(x) for x in version.split(".")]
-                    required_parts = [8, 1, 3]
-                    is_compatible = version_parts >= required_parts
-                    logger.info(
-                        f"Version parts: {version_parts}, Required: {required_parts}, Compatible: {is_compatible}"
-                    )
-
-                    # Store the successful command for future use (without --version)
+                if result.returncode == 0:
+                    # Store the successful command for future use
                     if not SERVER_COMMAND:
-                        SERVER_COMMAND = cmd[:-1]  # Remove the --version argument
+                        SERVER_COMMAND = cmd[:-len(args)]  # Remove the args to get base command
                         logger.info(f"Stored server command: {SERVER_COMMAND}")
-
-                    return {
-                        "installed": True,
-                        "version": version,
-                        "compatible": is_compatible,
-                    }
+                    
+                    return result
                 else:
                     logger.warning(
-                        f"Could not extract version from output: '{version_line}'"
+                        f"Command {i+1} failed with return code {result.returncode}"
                     )
-                    return {
-                        "installed": True,
-                        "version": "unknown",
-                        "compatible": False,
-                    }
-            else:
-                logger.warning(
-                    f"Command {i+1} failed with return code {result.returncode}"
-                )
-                if result.stderr:
-                    logger.warning(f"stderr: {result.stderr}")
-                # Try next command
-                continue
+                    if result.stderr:
+                        logger.warning(f"stderr: {result.stderr}")
+                    # Try next command
+                    continue
 
         except FileNotFoundError as e:
             logger.info(f"Command {i+1} not found: {e}")
@@ -328,96 +314,99 @@ async def check_lemonade_server_version():
 
     # If we get here, all commands failed
     logger.error("All lemonade-server commands failed")
-    return {"installed": False, "version": None, "compatible": False}
+    return None
+
+
+async def check_lemonade_sdk_available():
+    """Check if lemonade-sdk package is available in the current environment."""
+    logger.info("Checking for lemonade-sdk package...")
+    try:
+        # Convert command list to string for shell=True
+        cmd = [sys.executable, "-c", "import lemonade_server; print('available')"]
+        cmd_str = " ".join(cmd)
+        result = subprocess.run(
+            cmd_str,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            shell=True,  # Use shell=True to get updated environment after pip install
+        )
+        is_available = result.returncode == 0 and "available" in result.stdout
+        logger.info(f"lemonade-sdk package available: {is_available}")
+        return is_available
+    except Exception as e:
+        logger.info(f"lemonade-sdk package check failed: {e}")
+        return False
+
+
+async def check_lemonade_server_version():
+    """Check if lemonade-server is installed and get its version."""
+    logger.info("Checking lemonade-server version...")
+
+    result = await execute_lemonade_server_command(["--version"])
+    
+    if result is None:
+        logger.error("All lemonade-server commands failed")
+        return {"installed": False, "version": None, "compatible": False}
+
+    version_line = result.stdout.strip()
+    logger.info(f"Raw version output: '{version_line}'")
+
+    # Extract version number (format might be "lemonade-server 8.1.3" or just "8.1.3")
+    import re
+
+    version_match = re.search(r"(\d+\.\d+\.\d+)", version_line)
+    if version_match:
+        version = version_match.group(1)
+        logger.info(f"Extracted version: {version}")
+
+        # Check if version >= 8.1.3
+        version_parts = [int(x) for x in version.split(".")]
+        required_parts = [8, 1, 3]
+        is_compatible = version_parts >= required_parts
+        logger.info(
+            f"Version parts: {version_parts}, Required: {required_parts}, Compatible: {is_compatible}"
+        )
+
+        return {
+            "installed": True,
+            "version": version,
+            "compatible": is_compatible,
+        }
+    else:
+        logger.warning(
+            f"Could not extract version from output: '{version_line}'"
+        )
+        return {
+            "installed": True,
+            "version": "unknown",
+            "compatible": False,
+        }
 
 
 async def check_lemonade_server_running():
     """Check if lemonade-server is currently running."""
-    global SERVER_COMMAND
     logger.info("Checking if lemonade-server is running...")
 
-    # If we already know which command to use, use only that one
-    if SERVER_COMMAND:
-        commands_to_try = [SERVER_COMMAND + ["status"]]
+    result = await execute_lemonade_server_command(["status"])
+    
+    if result is None:
+        logger.error("All lemonade-server status commands failed")
+        return False
+
+    output = result.stdout.strip()
+    logger.info(f"Status output: '{output}'")
+    if "Server is running" in output:
+        logger.info("Server is running according to status command")
+        return True
     else:
-        # Try different ways to find lemonade-server
-        commands_to_try = []
-
-        # If not in PyInstaller, try lemonade-server-dev first
-        if not is_pyinstaller_environment():
-            commands_to_try.extend(
-                [
-                    [sys.executable, "-m", "lemonade_server.cli", "status"],
-                    ["lemonade-server-dev", "status"],
-                ]
-            )
-
-        # Add traditional commands and dynamic paths
-        commands_to_try.extend(
-            [
-                ["lemonade-server", "status"],
-                ["lemonade-server.bat", "status"],
-            ]
-        )
-
-        # Add dynamically discovered paths
-        for bin_path in find_lemonade_server_paths():
-            # Try both .exe and .bat in each discovered path
-            commands_to_try.extend(
-                [
-                    [os.path.join(bin_path, "lemonade-server.exe"), "status"],
-                    [os.path.join(bin_path, "lemonade-server.bat"), "status"],
-                ]
-            )
-
-    for i, cmd in enumerate(commands_to_try):
-        try:
-            logger.info(f"Trying status command {i+1}: {cmd}")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=10,
-                shell=True,  # Use shell=True to help with PATH resolution
-            )
-            logger.info(f"Status command {i+1} returned code: {result.returncode}")
-            logger.info(f"Status command {i+1} stdout: '{result.stdout}'")
-            logger.info(f"Status command {i+1} stderr: '{result.stderr}'")
-
-            if result.returncode == 0:
-                output = result.stdout.strip()
-                logger.info(f"Status output: '{output}'")
-                if "Server is running" in output:
-                    logger.info("Server is running according to status command")
-                    return True
-                else:
-                    logger.info("Server is not running according to status command")
-                    return False
-            else:
-                logger.warning(
-                    f"Status command {i+1} failed with return code {result.returncode}"
-                )
-                # Try next command
-                continue
-
-        except FileNotFoundError as e:
-            logger.info(f"Status command {i+1} not found: {e}")
-            continue
-        except subprocess.TimeoutExpired as e:
-            logger.warning(f"Status command {i+1} timed out: {e}")
-            continue
-        except Exception as e:
-            logger.error(f"Unexpected error with status command {i+1}: {e}")
-            continue
-
-    # If we get here, all commands failed
-    logger.error("All lemonade-server status commands failed")
-    return False
+        logger.info("Server is not running according to status command")
+        return False
 
 
 async def start_lemonade_server():
     """Start lemonade-server in the background."""
-    global SERVER_COMMAND, SERVER_PROCESS
+    global SERVER_PROCESS
     logger.info("Attempting to start lemonade-server...")
 
     # Check if server is already running
@@ -425,129 +414,82 @@ async def start_lemonade_server():
         logger.info("Server process is already running")
         return {"success": True, "message": "Server is already running"}
 
-    # If we already know which command to use, use only that one
-    if SERVER_COMMAND:
-        commands_to_try = [SERVER_COMMAND + ["serve"]]
-    else:
-        # Try different ways to find lemonade-server
-        commands_to_try = []
+    # Create temp files to capture output for debugging
+    import tempfile
 
-        # If not in PyInstaller, try lemonade-server-dev first
-        if not is_pyinstaller_environment():
-            commands_to_try.extend(
-                [
-                    [sys.executable, "-m", "lemonade_server.cli", "serve"],
-                    ["lemonade-server-dev", "serve"],
-                ]
-            )
+    stdout_file = tempfile.NamedTemporaryFile(
+        mode="w+", delete=False, suffix=".log"
+    )
+    stderr_file = tempfile.NamedTemporaryFile(
+        mode="w+", delete=False, suffix=".log"
+    )
 
-        # Add traditional commands and dynamic paths
-        commands_to_try.extend(
-            [
-                ["lemonade-server", "serve"],
-                ["lemonade-server.bat", "serve"],
-            ]
-        )
-
-        # Add dynamically discovered paths
-        for bin_path in find_lemonade_server_paths():
-            # Try both .exe and .bat in each discovered path
-            commands_to_try.extend(
-                [
-                    [os.path.join(bin_path, "lemonade-server.exe"), "serve"],
-                    [os.path.join(bin_path, "lemonade-server.bat"), "serve"],
-                ]
-            )
-
-    for i, cmd in enumerate(commands_to_try):
+    # Use the unified function to start the server
+    process = await execute_lemonade_server_command(
+        ["serve"], 
+        use_popen=True, 
+        stdout_file=stdout_file, 
+        stderr_file=stderr_file
+    )
+    
+    if process is None:
+        logger.error("All lemonade-server start commands failed")
+        stdout_file.close()
+        stderr_file.close()
         try:
-            logger.info(f"Trying start command {i+1}: {cmd}")
+            os.unlink(stdout_file.name)
+            os.unlink(stderr_file.name)
+        except:
+            pass
+        return {"success": False, "message": "Failed to start server: all commands failed"}
 
-            # Create temp files to capture output for debugging
-            import tempfile
+    # Give the process a moment to start and check if it's still running
+    import time
+    time.sleep(1)
 
-            stdout_file = tempfile.NamedTemporaryFile(
-                mode="w+", delete=False, suffix=".log"
+    # Check if process is still alive
+    if process.poll() is None:
+        logger.info(
+            f"Successfully started lemonade-server with PID: {process.pid}"
+        )
+        SERVER_PROCESS = process
+
+        # Close temp files
+        stdout_file.close()
+        stderr_file.close()
+
+        return {"success": True, "message": "Server start command issued"}
+    else:
+        # Process died immediately, check error output
+        stdout_file.close()
+        stderr_file.close()
+
+        # Read the error output
+        try:
+            with open(stderr_file.name, "r") as f:
+                stderr_content = f.read().strip()
+            with open(stdout_file.name, "r") as f:
+                stdout_content = f.read().strip()
+
+            logger.error(
+                f"Server failed immediately. Return code: {process.returncode}"
             )
-            stderr_file = tempfile.NamedTemporaryFile(
-                mode="w+", delete=False, suffix=".log"
-            )
+            if stderr_content:
+                logger.error(f"Stderr: {stderr_content}")
+            if stdout_content:
+                logger.info(f"Stdout: {stdout_content}")
 
-            # Start the server in the background without waiting for it
-            process = subprocess.Popen(
-                cmd,
-                stdout=stdout_file,
-                stderr=stderr_file,
-                creationflags=(
-                    subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-                ),
-                shell=True,  # Use shell=True to help with PATH resolution
-            )
+            # Clean up temp files
+            try:
+                os.unlink(stdout_file.name)
+                os.unlink(stderr_file.name)
+            except:
+                pass
 
-            # Give the process a moment to start and check if it's still running
-            import time
+        except Exception as read_error:
+            logger.error(f"Could not read process output: {read_error}")
 
-            time.sleep(1)
-
-            # Check if process is still alive
-            if process.poll() is None:
-                logger.info(
-                    f"Successfully started lemonade-server with PID: {process.pid}"
-                )
-
-                # Store the successful command and process
-                if not SERVER_COMMAND:
-                    SERVER_COMMAND = cmd[:-1]  # Remove the "serve" argument
-                    logger.info(f"Stored server command: {SERVER_COMMAND}")
-                SERVER_PROCESS = process
-
-                # Close temp files
-                stdout_file.close()
-                stderr_file.close()
-
-                return {"success": True, "message": "Server start command issued"}
-            else:
-                # Process died immediately, check error output
-                stdout_file.close()
-                stderr_file.close()
-
-                # Read the error output
-                try:
-                    with open(stderr_file.name, "r") as f:
-                        stderr_content = f.read().strip()
-                    with open(stdout_file.name, "r") as f:
-                        stdout_content = f.read().strip()
-
-                    logger.error(
-                        f"Command {i+1} failed immediately. Return code: {process.returncode}"
-                    )
-                    if stderr_content:
-                        logger.error(f"Stderr: {stderr_content}")
-                    if stdout_content:
-                        logger.info(f"Stdout: {stdout_content}")
-
-                    # Clean up temp files
-                    try:
-                        os.unlink(stdout_file.name)
-                        os.unlink(stderr_file.name)
-                    except:
-                        pass
-
-                except Exception as read_error:
-                    logger.error(f"Could not read process output: {read_error}")
-
-                continue
-
-        except FileNotFoundError as e:
-            logger.info(f"Start command {i+1} not found: {e}")
-            continue
-        except Exception as e:
-            logger.error(f"Failed to start with command {i+1}: {e}")
-            continue
-
-    # If we get here, all commands failed
-    logger.error("All lemonade-server start commands failed")
-    return {"success": False, "message": "Failed to start server: all commands failed"}
+        return {"success": False, "message": "Server process died immediately"}
 
 
 async def install_lemonade_sdk_package():
