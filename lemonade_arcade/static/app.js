@@ -18,6 +18,7 @@ class SetupManager {
             loaded: { completed: false, inProgress: false }
         };
         this.totalChecks = 5; // Updated to include model installation and loading
+        this.installationInProgress = false; // Track if installer was launched
     }
 
     updateProgress() {
@@ -121,6 +122,28 @@ class SetupManager {
         loadGames();
     }
 
+    async checkInstallationStep() {
+        // Refresh environment variables before checking installation
+        try {
+            await fetch('/api/refresh-environment', { method: 'POST' });
+        } catch (error) {
+            console.warn('Failed to refresh environment:', error);
+        }
+        
+        // Just check the installation step without resetting the entire setup
+        await this.doInstallationStep();
+        
+        // If installation is now complete, proceed with the full setup flow
+        if (this.checks.installed.completed) {
+            this.installationInProgress = false; // Reset the flag
+            console.log('Installation completed during check, restarting full setup flow...');
+            
+            // Reset setupInProgress and call startSetup to go through all steps
+            setupInProgress = false;
+            await this.startSetup();
+        }
+    }
+
     async startSetup() {
         if (setupInProgress) return;
         setupInProgress = true;
@@ -156,8 +179,18 @@ class SetupManager {
         
         // Step 2: Check and start server if needed
         console.log('Step 2: Checking server...');
-        await this.doServerStep();
+        try {
+            await this.doServerStep();
+            console.log('After doServerStep - running.completed =', this.checks.running.completed);
+        } catch (error) {
+            console.error('Error in doServerStep:', error);
+            setupInProgress = false;
+            this.showRetryButton();
+            return;
+        }
+        
         if (!this.checks.running.completed) {
+            console.log('Server step failed, stopping setup and showing retry button');
             setupInProgress = false;
             this.showRetryButton();
             return;
@@ -165,8 +198,18 @@ class SetupManager {
         
         // Step 3: Check connection
         console.log('Step 3: Checking connection...');
-        await this.doConnectionStep();
+        try {
+            await this.doConnectionStep();
+            console.log('After doConnectionStep - connection.completed =', this.checks.connection.completed);
+        } catch (error) {
+            console.error('Error in doConnectionStep:', error);
+            setupInProgress = false;
+            this.showRetryButton();
+            return;
+        }
+        
         if (!this.checks.connection.completed) {
+            console.log('Connection step failed, stopping setup and showing retry button');
             setupInProgress = false;
             this.showRetryButton();
             return;
@@ -195,9 +238,14 @@ class SetupManager {
     }
 
     async doInstallationStep() {
-        this.updateCheckStatus('installed', 'pending', 'Checking if Lemonade Server is installed...');
+        this.updateCheckStatus('installed', 'pending', 'Checking installation environment...');
         
         try {
+            // First check the installation environment
+            const envResponse = await fetch('/api/installation-environment');
+            const envInfo = await envResponse.json();
+            
+            // Then check installation status
             const response = await fetch('/api/installation-status');
             const status = await response.json();
             
@@ -205,15 +253,36 @@ class SetupManager {
                 this.checks.installed.completed = true;
                 this.updateCheckStatus('installed', 'success', `Lemonade Server v${status.version} is installed and compatible`);
             } else if (status.installed && !status.compatible) {
+                const updateText = envInfo.preferred_method === 'pip' ? 'Update via pip' : 'Update Now';
                 this.updateCheckStatus('installed', 'error', 
                     `Found version ${status.version}, but version 8.1.3+ is required`,
-                    true, 'Update Now', () => this.installServer());
+                    true, updateText, () => this.installServer(envInfo));
                 return; // Stop here, user needs to take action
             } else {
-                this.updateCheckStatus('installed', 'error', 
-                    'Lemonade Server is not installed',
-                    true, 'Install Now', () => this.installServer());
-                return; // Stop here, user needs to take action
+                // Not installed - check if we previously launched an installer
+                if (this.installationInProgress) {
+                    // Installation was previously initiated, show check again option
+                    this.updateCheckStatus('installed', 'pending', 
+                        'Installation may still be in progress. Please complete the installation, then click "Check Again".',
+                        true, 'Check Again', () => this.checkInstallationStep());
+                    return; // Stop here, user needs to take action
+                } else {
+                    // Not installed and no previous installation attempt - show appropriate installation method
+                    let installText = 'Install Now';
+                    let description = 'Lemonade Server is not installed';
+                    
+                    if (envInfo.preferred_method === 'pip') {
+                        installText = 'Install via pip';
+                        description = 'Lemonade Server is not installed. Will attempt pip installation first.';
+                    } else {
+                        installText = 'Download Installer';
+                        description = 'Lemonade Server is not installed. Will download the installer.';
+                    }
+                    
+                    this.updateCheckStatus('installed', 'error', description,
+                        true, installText, () => this.installServer(envInfo));
+                    return; // Stop here, user needs to take action
+                }
             }
         } catch (error) {
             console.error('Failed to check installation:', error);
@@ -224,38 +293,47 @@ class SetupManager {
     }
 
     async doServerStep() {
+        console.log('Starting doServerStep...');
         this.updateCheckStatus('running', 'pending', 'Checking if Lemonade Server is running...');
         
         try {
+            console.log('Making initial server status check...');
             const response = await fetch('/api/server-running-status');
             const status = await response.json();
+            console.log('Initial server status result:', status);
             
             if (status.running) {
+                console.log('Server is already running, marking as completed');
                 this.checks.running.completed = true;
                 this.updateCheckStatus('running', 'success', 'Lemonade Server is running');
             } else {
+                console.log('Server not running initially, starting retry loop...');
                 // Server is not running, but it might be starting up
                 // Wait and retry with multiple attempts before giving up
                 this.updateCheckStatus('running', 'pending', 'Server starting up, waiting for it to be ready...');
                 
                 let attempts = 0;
-                const maxAttempts = 15; // 30 seconds total (15 attempts * 2 seconds each)
+                const maxAttempts = 8; // Reduced to 16 seconds (8 attempts * 2 seconds each)
                 let serverStarted = false;
                 
                 while (attempts < maxAttempts && !serverStarted) {
+                    console.log(`Server check attempt ${attempts + 1}/${maxAttempts}...`);
                     await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
                     attempts++;
                     
                     try {
                         const retryResponse = await fetch('/api/server-running-status');
                         const retryStatus = await retryResponse.json();
+                        console.log(`Retry attempt ${attempts} result:`, retryStatus);
                         
                         if (retryStatus.running) {
+                            console.log('Server is now running! Breaking out of retry loop');
                             serverStarted = true;
                             this.checks.running.completed = true;
                             this.updateCheckStatus('running', 'success', 'Lemonade Server is running');
                             break;
                         } else {
+                            console.log(`Attempt ${attempts} - server still not running`);
                             this.updateCheckStatus('running', 'pending', 
                                 `Server starting up, waiting... (${attempts}/${maxAttempts})`);
                         }
@@ -267,30 +345,77 @@ class SetupManager {
                 }
                 
                 if (!serverStarted) {
+                    console.log('Server failed to start within timeout period');
                     this.updateCheckStatus('running', 'error', 
-                        'Lemonade Server failed to start within 30 seconds',
+                        'Lemonade Server failed to start within 16 seconds',
                         true, 'Retry', () => this.startSetup());
+                } else {
+                    console.log('Server successfully started during retry loop');
                 }
             }
+            
+            // Additional verification: if server is marked as running, 
+            // give it a moment to be fully ready and test basic connectivity
+            if (this.checks.running.completed) {
+                console.log('Server marked as running, waiting 2 seconds for full readiness...');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Quick connectivity test to ensure the server is actually responsive
+                console.log('Testing basic server connectivity...');
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                    
+                    const connectivityResponse = await fetch('/api/server-running-status', {
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+                    
+                    const connectivityStatus = await connectivityResponse.json();
+                    console.log('Connectivity test result:', connectivityStatus);
+                    
+                    if (!connectivityStatus.running) {
+                        console.log('Connectivity test failed - server not responsive after startup');
+                        this.checks.running.completed = false;
+                        this.updateCheckStatus('running', 'error', 
+                            'Server started but is not responding properly',
+                            true, 'Retry', () => this.startSetup());
+                    } else {
+                        console.log('Server passed connectivity test - fully ready');
+                    }
+                } catch (connectivityError) {
+                    console.error('Connectivity test failed:', connectivityError);
+                    // Don't fail the entire step for connectivity test issues
+                    // The main API connection test in the next step will catch real issues
+                    console.log('Connectivity test failed, but proceeding anyway - will be caught in API connection step');
+                }
+            }
+            
         } catch (error) {
             console.error('Failed to check server status:', error);
             this.updateCheckStatus('running', 'error', 
                 'Failed to check server status',
                 true, 'Retry', () => this.startSetup());
         }
+        console.log('doServerStep completed. running.completed =', this.checks.running.completed);
     }
 
     async doConnectionStep() {
+        console.log('Starting doConnectionStep...');
         this.updateCheckStatus('connection', 'pending', 'Testing connection to Lemonade Server...');
         
         try {
+            console.log('Making API connection status request...');
             const response = await fetch('/api/api-connection-status');
             const status = await response.json();
+            console.log('API connection status result:', status);
             
             if (status.api_online) {
+                console.log('API connection successful!');
                 this.checks.connection.completed = true;
                 this.updateCheckStatus('connection', 'success', 'Successfully connected to Lemonade Server API');
             } else {
+                console.log('API connection failed - server not responding');
                 this.updateCheckStatus('connection', 'error', 
                     'Cannot connect to Lemonade Server API',
                     true, 'Retry', () => this.startSetup());
@@ -301,6 +426,7 @@ class SetupManager {
                 'Failed to test API connection',
                 true, 'Retry', () => this.startSetup());
         }
+        console.log('doConnectionStep completed. connection.completed =', this.checks.connection.completed);
     }
 
     async doModelStep() {
@@ -419,36 +545,77 @@ class SetupManager {
         }
     }
 
-    async installServer() {
+    async installServer(envInfo = null) {
         const btn = document.getElementById('btnInstalled');
         if (btn) {
             btn.disabled = true;
             btn.textContent = 'Installing...';
         }
         
-        this.updateCheckStatus('installed', 'pending', 'Downloading and installing Lemonade Server... This may take several minutes.');
+        // Get environment info if not provided
+        if (!envInfo) {
+            try {
+                const envResponse = await fetch('/api/installation-environment');
+                envInfo = await envResponse.json();
+            } catch (error) {
+                console.error('Failed to get environment info:', error);
+                envInfo = { preferred_method: 'installer' }; // fallback
+            }
+        }
+        
+        // Set appropriate status message based on installation method
+        let statusMessage = 'Installing Lemonade Server...';
+        if (envInfo.preferred_method === 'pip') {
+            statusMessage = 'Installing lemonade-sdk package via pip... This may take a few minutes.';
+        } else {
+            statusMessage = 'Downloading installer... This may take several minutes.';
+        }
+        
+        this.updateCheckStatus('installed', 'pending', statusMessage);
         
         try {
             const response = await fetch('/api/install-server', { method: 'POST' });
             const result = await response.json();
             
             if (result.success) {
-                this.updateCheckStatus('installed', 'success', 'Lemonade Server installed successfully!');
+                let successMessage = result.message;
                 
-                // Wait a moment then restart the setup process
-                setTimeout(() => {
-                    this.startSetup();
-                }, 2000);
+                if (result.interactive) {
+                    // Interactive installer launched - mark installation as in progress
+                    this.installationInProgress = true;
+                    this.updateCheckStatus('installed', 'pending', 
+                        'Installer launched. Please complete the installation in the installer window, then click "Check Again" below.',
+                        true, 'Check Again', () => this.checkInstallationStep());
+                    return;
+                } else {
+                    // Automatic installation completed
+                    this.installationInProgress = false; // Reset the flag
+                    this.updateCheckStatus('installed', 'success', successMessage);
+                    
+                    // Wait a moment then restart the setup process
+                    setTimeout(() => {
+                        this.startSetup();
+                    }, 2000);
+                }
             } else {
-                this.updateCheckStatus('installed', 'error', 
-                    `Installation failed: ${result.message}`,
-                    true, 'Retry Install', () => this.installServer());
+                let errorMessage = `Installation failed: ${result.message}`;
+                let actionText = 'Retry Install';
+                
+                // If we have a GitHub link, show a different action
+                if (result.github_link) {
+                    actionText = 'Open GitHub';
+                    this.updateCheckStatus('installed', 'error', errorMessage, true, actionText, () => {
+                        window.open(result.github_link, '_blank');
+                    });
+                } else {
+                    this.updateCheckStatus('installed', 'error', errorMessage, true, actionText, () => this.installServer(envInfo));
+                }
             }
         } catch (error) {
             console.error('Installation failed:', error);
             this.updateCheckStatus('installed', 'error', 
                 'Installation failed due to network error',
-                true, 'Retry Install', () => this.installServer());
+                true, 'Retry Install', () => this.installServer(envInfo));
         }
     }
 

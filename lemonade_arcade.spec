@@ -118,3 +118,5 @@ exe = EXE(
     entitlements_file=None,
     icon='img/icon.ico'
 )
+
+# Copyright (c) 2025 AMD

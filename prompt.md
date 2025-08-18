@@ -25,3 +25,5 @@ User journey:
     1. show a status in the main UI like "game running" and don't let the user launch any new games until they close the prior game.
 1. The user can start any game from their library by clicking the icon made in the previous step. 
     - Each icon should have an on-hover "X" button, which when clicked opens a "are you sure" dialog to delete the game. Deletion should remove the python file for that game, and the icon from the library.
+
+<!--Copyright (c) 2025 AMD-->
