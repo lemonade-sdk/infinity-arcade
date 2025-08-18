@@ -70,6 +70,10 @@ GAMES_DIR = Path.home() / ".lemonade-arcade" / "games"
 RUNNING_GAMES: Dict[str, subprocess.Popen] = {}
 GAME_METADATA: Dict[str, Dict] = {}
 
+# Server management state
+SERVER_COMMAND = None  # Track which command is used for this server instance
+SERVER_PROCESS = None  # Track the server process to avoid starting multiple instances
+
 # Ensure games directory exists
 GAMES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -126,21 +130,129 @@ def save_metadata():
         print(f"Error saving metadata: {e}")
 
 
+def is_pyinstaller_environment():
+    """Check if we're running in a PyInstaller bundle."""
+    return getattr(sys, "frozen", False)
+
+
+def find_lemonade_server_paths():
+    """Find actual lemonade-server installation paths by checking the environment."""
+    paths = []
+
+    # Check current PATH for lemonade_server/bin directories
+    current_path = os.environ.get("PATH", "")
+    for path_entry in current_path.split(";"):
+        path_entry = path_entry.strip()
+        if "lemonade_server" in path_entry.lower() and "bin" in path_entry.lower():
+            if os.path.exists(path_entry):
+                paths.append(path_entry)
+                logger.info(f"Found lemonade-server path in PATH: {path_entry}")
+
+    return paths
+
+
+def reset_server_state():
+    """Reset server state when installation changes."""
+    global SERVER_COMMAND, SERVER_PROCESS
+    logger.info("Resetting server state")
+    SERVER_COMMAND = None
+    if SERVER_PROCESS and SERVER_PROCESS.poll() is None:
+        try:
+            SERVER_PROCESS.terminate()
+        except:
+            pass
+    SERVER_PROCESS = None
+
+
+def refresh_environment():
+    """Refresh the current process environment variables from the system."""
+    try:
+        import winreg
+        import subprocess
+
+        logger.info("Refreshing environment variables...")
+
+        # Get system PATH
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        ) as key:
+            system_path = winreg.QueryValueEx(key, "PATH")[0]
+
+        # Get user PATH
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as key:
+                user_path = winreg.QueryValueEx(key, "PATH")[0]
+        except FileNotFoundError:
+            user_path = ""
+
+        # Combine and update current process environment
+        new_path = system_path
+        if user_path:
+            new_path = user_path + ";" + system_path
+
+        os.environ["PATH"] = new_path
+        logger.info(f"Updated PATH: {new_path[:200]}...")  # Log first 200 chars
+
+    except Exception as e:
+        logger.warning(f"Failed to refresh environment: {e}")
+
+
+async def check_lemonade_sdk_available():
+    """Check if lemonade-sdk package is available in the current environment."""
+    logger.info("Checking for lemonade-sdk package...")
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import lemonade_server; print('available')"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        is_available = result.returncode == 0 and "available" in result.stdout
+        logger.info(f"lemonade-sdk package available: {is_available}")
+        return is_available
+    except Exception as e:
+        logger.info(f"lemonade-sdk package check failed: {e}")
+        return False
+
+
 async def check_lemonade_server_version():
     """Check if lemonade-server is installed and get its version."""
+    global SERVER_COMMAND
     logger.info("Checking lemonade-server version...")
 
-    # Try different ways to find lemonade-server
-    commands_to_try = [
-        ["lemonade-server", "--version"],
-        ["lemonade-server.bat", "--version"],
-        [
-            os.path.expanduser(
-                "~\\AppData\\Local\\lemonade_server\\bin\\lemonade-server.bat"
-            ),
-            "--version",
-        ],
-    ]
+    # If we already know which command to use, use only that one
+    if SERVER_COMMAND:
+        commands_to_try = [SERVER_COMMAND + ["--version"]]
+    else:
+        # Try different ways to find lemonade-server
+        commands_to_try = []
+
+        # If not in PyInstaller, try lemonade-server-dev first
+        if not is_pyinstaller_environment():
+            commands_to_try.extend(
+                [
+                    ["lemonade-server-dev", "--version"],
+                ]
+            )
+
+        # Always add traditional commands and dynamic paths
+        commands_to_try.extend(
+            [
+                ["lemonade-server", "--version"],
+                ["lemonade-server.bat", "--version"],
+            ]
+        )
+
+        # Add dynamically discovered paths
+        for bin_path in find_lemonade_server_paths():
+            # Try both .exe and .bat in each discovered path
+            commands_to_try.extend(
+                [
+                    [os.path.join(bin_path, "lemonade-server.exe"), "--version"],
+                    [os.path.join(bin_path, "lemonade-server.bat"), "--version"],
+                ]
+            )
 
     for i, cmd in enumerate(commands_to_try):
         try:
@@ -175,6 +287,11 @@ async def check_lemonade_server_version():
                     logger.info(
                         f"Version parts: {version_parts}, Required: {required_parts}, Compatible: {is_compatible}"
                     )
+
+                    # Store the successful command for future use (without --version)
+                    if not SERVER_COMMAND:
+                        SERVER_COMMAND = cmd[:-1]  # Remove the --version argument
+                        logger.info(f"Stored server command: {SERVER_COMMAND}")
 
                     return {
                         "installed": True,
@@ -216,19 +333,42 @@ async def check_lemonade_server_version():
 
 async def check_lemonade_server_running():
     """Check if lemonade-server is currently running."""
+    global SERVER_COMMAND
     logger.info("Checking if lemonade-server is running...")
 
-    # Try different ways to find lemonade-server
-    commands_to_try = [
-        ["lemonade-server", "status"],
-        ["lemonade-server.bat", "status"],
-        [
-            os.path.expanduser(
-                "~\\AppData\\Local\\lemonade_server\\bin\\lemonade-server.bat"
-            ),
-            "status",
-        ],
-    ]
+    # If we already know which command to use, use only that one
+    if SERVER_COMMAND:
+        commands_to_try = [SERVER_COMMAND + ["status"]]
+    else:
+        # Try different ways to find lemonade-server
+        commands_to_try = []
+
+        # If not in PyInstaller, try lemonade-server-dev first
+        if not is_pyinstaller_environment():
+            commands_to_try.extend(
+                [
+                    [sys.executable, "-m", "lemonade_server.cli", "status"],
+                    ["lemonade-server-dev", "status"],
+                ]
+            )
+
+        # Add traditional commands and dynamic paths
+        commands_to_try.extend(
+            [
+                ["lemonade-server", "status"],
+                ["lemonade-server.bat", "status"],
+            ]
+        )
+
+        # Add dynamically discovered paths
+        for bin_path in find_lemonade_server_paths():
+            # Try both .exe and .bat in each discovered path
+            commands_to_try.extend(
+                [
+                    [os.path.join(bin_path, "lemonade-server.exe"), "status"],
+                    [os.path.join(bin_path, "lemonade-server.bat"), "status"],
+                ]
+            )
 
     for i, cmd in enumerate(commands_to_try):
         try:
@@ -277,19 +417,47 @@ async def check_lemonade_server_running():
 
 async def start_lemonade_server():
     """Start lemonade-server in the background."""
+    global SERVER_COMMAND, SERVER_PROCESS
     logger.info("Attempting to start lemonade-server...")
 
-    # Try different ways to find lemonade-server
-    commands_to_try = [
-        ["lemonade-server", "serve"],
-        ["lemonade-server.bat", "serve"],
-        [
-            os.path.expanduser(
-                "~\\AppData\\Local\\lemonade_server\\bin\\lemonade-server.bat"
-            ),
-            "serve",
-        ],
-    ]
+    # Check if server is already running
+    if SERVER_PROCESS and SERVER_PROCESS.poll() is None:
+        logger.info("Server process is already running")
+        return {"success": True, "message": "Server is already running"}
+
+    # If we already know which command to use, use only that one
+    if SERVER_COMMAND:
+        commands_to_try = [SERVER_COMMAND + ["serve"]]
+    else:
+        # Try different ways to find lemonade-server
+        commands_to_try = []
+
+        # If not in PyInstaller, try lemonade-server-dev first
+        if not is_pyinstaller_environment():
+            commands_to_try.extend(
+                [
+                    [sys.executable, "-m", "lemonade_server.cli", "serve"],
+                    ["lemonade-server-dev", "serve"],
+                ]
+            )
+
+        # Add traditional commands and dynamic paths
+        commands_to_try.extend(
+            [
+                ["lemonade-server", "serve"],
+                ["lemonade-server.bat", "serve"],
+            ]
+        )
+
+        # Add dynamically discovered paths
+        for bin_path in find_lemonade_server_paths():
+            # Try both .exe and .bat in each discovered path
+            commands_to_try.extend(
+                [
+                    [os.path.join(bin_path, "lemonade-server.exe"), "serve"],
+                    [os.path.join(bin_path, "lemonade-server.bat"), "serve"],
+                ]
+            )
 
     for i, cmd in enumerate(commands_to_try):
         try:
@@ -326,6 +494,12 @@ async def start_lemonade_server():
                 logger.info(
                     f"Successfully started lemonade-server with PID: {process.pid}"
                 )
+
+                # Store the successful command and process
+                if not SERVER_COMMAND:
+                    SERVER_COMMAND = cmd[:-1]  # Remove the "serve" argument
+                    logger.info(f"Stored server command: {SERVER_COMMAND}")
+                SERVER_PROCESS = process
 
                 # Close temp files
                 stdout_file.close()
@@ -376,8 +550,60 @@ async def start_lemonade_server():
     return {"success": False, "message": "Failed to start server: all commands failed"}
 
 
+async def install_lemonade_sdk_package():
+    """Install lemonade-sdk package using pip."""
+    try:
+        logger.info("Installing lemonade-sdk package using pip...")
+
+        # Install the package
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "lemonade-sdk"],
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minutes timeout
+        )
+
+        if result.returncode == 0:
+            logger.info("lemonade-sdk package installed successfully")
+            return {
+                "success": True,
+                "message": "lemonade-sdk package installed successfully. You can now use 'lemonade-server-dev' command.",
+            }
+        else:
+            error_msg = result.stderr or result.stdout or "Unknown installation error"
+            logger.error(f"pip install failed: {error_msg}")
+            return {"success": False, "message": f"pip install failed: {error_msg}"}
+
+    except Exception as e:
+        logger.error(f"Failed to install lemonade-sdk package: {e}")
+        return {"success": False, "message": f"Failed to install: {e}"}
+
+
 async def download_and_install_lemonade_server():
-    """Download and install lemonade-server silently."""
+    """Download and install lemonade-server using the appropriate method."""
+
+    # Reset server state since we're installing/updating
+    reset_server_state()
+
+    # If not in PyInstaller environment, prefer pip installation
+    if not is_pyinstaller_environment():
+        logger.info(
+            "Development environment detected, attempting pip installation first..."
+        )
+        pip_result = await install_lemonade_sdk_package()
+        if pip_result["success"]:
+            return pip_result
+        else:
+            logger.info(
+                "pip installation failed, falling back to GitHub instructions..."
+            )
+            return {
+                "success": False,
+                "message": "Could not install lemonade-sdk package. Please visit https://github.com/lemonade-sdk/lemonade for installation instructions.",
+                "github_link": "https://github.com/lemonade-sdk/lemonade",
+            }
+
+    # PyInstaller environment or fallback - use installer for Windows
     try:
         # Download the installer
         installer_url = "https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe"
@@ -389,7 +615,7 @@ async def download_and_install_lemonade_server():
         logger.info(f"Downloading installer from {installer_url}")
 
         # Download with progress tracking
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
             async with client.stream("GET", installer_url) as response:
                 if response.status_code != 200:
                     return {
@@ -403,33 +629,20 @@ async def download_and_install_lemonade_server():
 
         logger.info(f"Downloaded installer to {installer_path}")
 
-        # Run silent installation without Ryzen AI hybrid support
-        install_cmd = [installer_path, "/S"]
+        # Run interactive installation (not silent)
+        install_cmd = [installer_path]
 
-        logger.info(f"Running silent installation: {' '.join(install_cmd)}")
+        logger.info(f"Running interactive installation: {' '.join(install_cmd)}")
 
-        result = subprocess.run(
-            install_cmd,
-            capture_output=True,
-            text=True,
-            timeout=300,  # 5 minutes timeout
-        )
+        # Start the installer but don't wait for it to complete
+        # This allows the user to see the installation UI
+        process = subprocess.Popen(install_cmd)
 
-        # Clean up installer
-        try:
-            os.remove(installer_path)
-            os.rmdir(temp_dir)
-        except Exception:
-            pass
-
-        if result.returncode == 0:
-            return {
-                "success": True,
-                "message": "Lemonade Server installed successfully",
-            }
-        else:
-            error_msg = result.stderr or result.stdout or "Unknown installation error"
-            return {"success": False, "message": f"Installation failed: {error_msg}"}
+        return {
+            "success": True,
+            "message": "Installer launched. Please complete the installation and then restart Lemonade Arcade.",
+            "interactive": True,
+        }
 
     except Exception as e:
         logger.error(f"Failed to download/install lemonade-server: {e}")
@@ -438,46 +651,67 @@ async def download_and_install_lemonade_server():
 
 async def check_lemonade_server():
     """Check if Lemonade Server is running."""
-    logger.debug(f"Checking Lemonade Server at {LEMONADE_SERVER_URL}")
-    try:
-        # Use a longer timeout and retry logic for more robust checking
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(f"{LEMONADE_SERVER_URL}/api/v1/models")
-            logger.debug(f"Server check response status: {response.status_code}")
-            return response.status_code == 200
-    except httpx.TimeoutException:
-        logger.debug("Server check timed out - server might be busy")
-        # Try a simpler health check endpoint if available
+    logger.info(f"Checking Lemonade Server at {LEMONADE_SERVER_URL}")
+
+    # Try multiple times with increasing delays to give server time to start
+    for attempt in range(3):
         try:
+            # Use a longer timeout and retry logic for more robust checking
             async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.get(
-                    f"{LEMONADE_SERVER_URL}/health", follow_redirects=True
+                response = await client.get(f"{LEMONADE_SERVER_URL}/api/v1/models")
+                logger.info(
+                    f"Server check attempt {attempt + 1} response status: {response.status_code}"
                 )
-                logger.debug(f"Health check response status: {response.status_code}")
-                return response.status_code == 200
+                if response.status_code == 200:
+                    return True
+                elif response.status_code == 404:
+                    # Try the health endpoint if models endpoint doesn't exist
+                    logger.info("Models endpoint not found, trying health endpoint")
+                    try:
+                        health_response = await client.get(
+                            f"{LEMONADE_SERVER_URL}/health"
+                        )
+                        logger.info(
+                            f"Health check response status: {health_response.status_code}"
+                        )
+                        return health_response.status_code == 200
+                    except Exception as e:
+                        logger.info(f"Health check failed: {e}")
+
+        except httpx.TimeoutException:
+            logger.info(
+                f"Server check attempt {attempt + 1} timed out - server might be starting up"
+            )
+        except httpx.ConnectError as e:
+            logger.info(f"Server check attempt {attempt + 1} connection failed: {e}")
         except Exception as e:
-            logger.debug(f"Health check also failed: {e}")
-            return False
-    except Exception as e:
-        logger.debug(f"Server check failed: {e}")
-        return False
+            logger.info(f"Server check attempt {attempt + 1} failed: {e}")
+
+        # Wait before next attempt (except on last attempt)
+        if attempt < 2:
+            import asyncio
+
+            await asyncio.sleep(2)
+
+    logger.info("All server check attempts failed")
+    return False
 
 
 async def get_available_models():
     """Get list of available models from Lemonade Server."""
-    logger.debug("Getting available models from Lemonade Server")
+    logger.info("Getting available models from Lemonade Server")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(f"{LEMONADE_SERVER_URL}/api/v1/models")
             if response.status_code == 200:
                 data = response.json()
                 models = [model["id"] for model in data.get("data", [])]
-                logger.debug(f"Found {len(models)} available models: {models}")
+                logger.info(f"Found {len(models)} available models: {models}")
                 return models
             else:
                 logger.warning(f"Failed to get models, status: {response.status_code}")
     except Exception as e:
-        logger.debug(f"Error getting models: {e}")
+        logger.info(f"Error getting models: {e}")
     return []
 
 
@@ -576,8 +810,8 @@ async def load_required_model():
 
     try:
         async with httpx.AsyncClient(
-            timeout=60.0
-        ) as client:  # 1 minute timeout for model loading
+            timeout=600.0
+        ) as client:  # 10 minute timeout for model loading
             response = await client.post(
                 f"{LEMONADE_SERVER_URL}/api/v1/load",
                 json={"model_name": required_model},
@@ -815,9 +1049,11 @@ async def installation_status():
 @app.get("/api/server-running-status")
 async def server_running_status():
     """Check if lemonade-server is running ONLY, and auto-start if needed."""
-    logger.info("Server running status endpoint called")
+    logger.info("=== Server running status endpoint called ===")
+
+    # Check if server is currently running
     is_running = await check_lemonade_server_running()
-    logger.info(f"Running check result: {is_running}")
+    logger.info(f"Initial running check result: {is_running}")
 
     # If server is not running, try to start it automatically
     if not is_running:
@@ -829,29 +1065,35 @@ async def server_running_status():
             # Give it a moment to start up
             import asyncio
 
+            logger.info("Waiting 2 seconds for server to initialize...")
             await asyncio.sleep(2)
+
             # Check again
             is_running = await check_lemonade_server_running()
             logger.info(f"Running check after auto-start: {is_running}")
+        else:
+            logger.warning(
+                f"Auto-start failed: {start_result.get('error', 'Unknown error')}"
+            )
 
     result = {
         "running": is_running,
     }
-    logger.info(f"Returning server running status: {result}")
+    logger.info(f"=== Returning server running status: {result} ===")
     return JSONResponse(result)
 
 
 @app.get("/api/api-connection-status")
 async def api_connection_status():
     """Check API connection status ONLY."""
-    logger.info("API connection status endpoint called")
+    logger.info("=== API connection status endpoint called ===")
     api_online = await check_lemonade_server()
     logger.info(f"API online check result: {api_online}")
 
     result = {
         "api_online": api_online,
     }
-    logger.info(f"Returning API connection status: {result}")
+    logger.info(f"=== Returning API connection status: {result} ===")
     return JSONResponse(result)
 
 
@@ -884,6 +1126,43 @@ async def model_loading_status():
     }
     logger.info(f"Returning model loading status: {result}")
     return JSONResponse(result)
+
+
+@app.get("/api/installation-environment")
+async def installation_environment():
+    """Check installation environment and available methods."""
+    logger.info("Installation environment endpoint called")
+
+    is_pyinstaller = is_pyinstaller_environment()
+    sdk_available = (
+        await check_lemonade_sdk_available() if not is_pyinstaller else False
+    )
+
+    result = {
+        "is_pyinstaller": is_pyinstaller,
+        "sdk_available": sdk_available,
+        "platform": sys.platform,
+        "preferred_method": "pip" if not is_pyinstaller else "installer",
+    }
+
+    logger.info(f"Returning installation environment: {result}")
+    return JSONResponse(result)
+
+
+@app.post("/api/refresh-environment")
+async def refresh_environment_endpoint():
+    """Refresh environment variables after installation."""
+    logger.info("Refresh environment endpoint called")
+    try:
+        refresh_environment()
+        # Also reset server state so it will re-discover commands
+        reset_server_state()
+        return JSONResponse({"success": True, "message": "Environment refreshed"})
+    except Exception as e:
+        logger.error(f"Failed to refresh environment: {e}")
+        return JSONResponse(
+            {"success": False, "message": f"Failed to refresh environment: {e}"}
+        )
 
 
 @app.post("/api/install-server")
@@ -1289,3 +1568,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Copyright (c) 2025 AMD

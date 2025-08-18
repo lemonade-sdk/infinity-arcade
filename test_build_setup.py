@@ -101,3 +101,5 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+# Copyright (c) 2025 AMD

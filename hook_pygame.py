@@ -19,7 +19,7 @@ def setup_pygame_environment():
         # Set environment variables that help with SDL2 loading and prevent SDL3
         os.environ["SDL_VIDEODRIVER"] = "windib"
         os.environ["SDL_AUDIODRIVER"] = "directsound"
-        
+
         # Explicitly prefer SDL2 over SDL3
         os.environ["SDL_DYNAMIC_API"] = os.path.join(bundle_dir, "SDL2.dll")
 
@@ -31,3 +31,5 @@ def setup_pygame_environment():
 
 # Run the setup immediately when this hook is imported
 setup_pygame_environment()
+
+# Copyright (c) 2025 AMD

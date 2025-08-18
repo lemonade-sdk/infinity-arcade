@@ -16,6 +16,7 @@ setup(
         "jinja2>=3.1.0",
         "python-multipart>=0.0.6",
     ],
+    extras_require={"dev": ["lemonade-sdk>=8.1.3"]},
     entry_points={
         "console_scripts": [
             "lemonade-arcade=lemonade_arcade.cli:main",
@@ -37,3 +38,5 @@ setup(
         "Programming Language :: Python :: 3.12",
     ],
 )
+
+# Copyright (c) 2025 AMD
