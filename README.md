@@ -1,8 +1,77 @@
-# 🍋 Lemonade Arcade
 
 ![Lemonade Arcade Banner](./img/banner.png)
 
-An AI-powered game generator and arcade that creates playable Python games using LLMs.
+<p align="center">
+  <a href="https://discord.gg/5xXzkMu8Zk">
+    <img src="https://img.shields.io/badge/Discord-7289DA?logo=discord&logoColor=white" alt="Discord" />
+  </a>
+  <a href="docs/README.md#installation" title="Check out our instructions">
+    <img src="https://img.shields.io/badge/Windows-11-0078D6?logo=windows&logoColor=white" alt="Windows 11" />
+  </a>
+  <a href="https://lemonade-server.ai/#linux" title="Ubuntu 24.04 & 25.04 Supported">
+    <img src="https://img.shields.io/badge/Ubuntu-24.04%20%7C%2025.04-E95420?logo=ubuntu&logoColor=white" alt="Ubuntu 24.04 | 25.04" />
+  </a>
+  <a href="#installation" title="Check out our instructions">
+    <img src="https://img.shields.io/badge/Python-3.10--3.13-blue?logo=python&logoColor=white" alt="Made with Python" />
+  </a>
+  <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest" title="Download the latest release">
+    <img src="https://img.shields.io/github/v/release/lemonade-sdk/lemonade-arcade?include_prereleases" alt="Latest Release" />
+  </a>
+  <a href="https://tooomm.github.io/github-release-stats/?username=lemonade-sdk&repository=lemonade">
+    <img src="https://img.shields.io/github/downloads/lemonade-sdk/lemonade-arcade/total.svg" alt="GitHub downloads" />
+  </a>
+  <a href="https://github.com/lemonade-sdk/lemonade-arcade/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" />
+  </a>
+  <a href="https://star-history.com/#lemonade-sdk/lemonade-arcade">
+    <img src="https://img.shields.io/badge/Star%20History-View-brightgreen" alt="Star History Chart" />
+  </a>
+</p>
+
+Use your overpowered GPU run AI that produces creative retro-style games! Enter your prompt, and the playable game pops open in minutes.
+
+Push your imagination to the limit, it's 100% free and local.
+
+
+## Hardware Requirement
+
+Lemonade Arcade uses a 30 billion parameter LLM to generate games, which requires certain hardware specs to run well.
+
+| Configuration | GPU/APU | Memory | Disk Space |
+|---------------|---------|---------|---------|
+| **Minimum (CPU)** | Ryzen AI 7000-series chip or newer | 64 GB RAM | 20 GB |
+| **Suggested (dGPU)** | Radeon 7800XT or newer | 16 GB VRAM | 20 GB |
+| **Suggested (APU)** | Strix Halo (Ryzen AI MAX 395) | 64 GB unified memory | 20 GB |
+
+## Quick Start
+
+
+<p align="center">Windows: click this:</p>
+<p align="center">
+   <img src=https://github.com/lemonade-sdk/assets/blob/main/arcade/exe_icon.png?raw=true alt="Arcade Quick Start"/>
+</p>
+
+<p align="center">
+   Linux: click <a href="#linux-and-windows-devs">this</a>
+</p>
+
+## Demo
+
+> [!TIP]
+> Generate creative new retro-style games in minutes, based on prompts like `Make space invaders, but I can fly around the whole screen instead of being stuck on the bottom.`
+
+![Lemonade Arcade GIF](https://github.com/lemonade-sdk/assets/blob/main/arcade/space_invaders_x.gif?raw=true)
+
+> [!TIP]
+> Right click any game you've generated to get the Python source code or the prompt, so you can edit and remix further!
+
+
+<img src="https://github.com/lemonade-sdk/assets/blob/main/arcade/home2.png?raw=true" alt="Lemonade Arcade UI" width="75%">
+
+> [!TIP]
+> Everything you need to run an LLM on your GPU is automatically set up for you.
+
+<img src="https://github.com/lemonade-sdk/assets/blob/main/arcade/setup.png?raw=true" alt="Lemonade Arcade setup" width="50%">
 
 ## Overview
 
@@ -15,25 +84,17 @@ Lemonade Arcade combines the convenience of a ChatGPT-like interface with the co
 - **Game Library**: All generated games are saved and can be replayed anytime.
 - **Easy Management**: View game source code, copy prompts for remixing, and delete games you don't want with a simple click.
 
-## Requirements
-
-### LLM and Hardware
-
-We strongly recommend using code-tuned models size 24B and larger. Look for the "CODING" label in the Lemonade model manager.
-
-To run these, you will need a computer with at least 32 GB of system RAM and/or 16 GB of VRAM.
-
-### Software
-
-- Python 3.8 or higher ([Miniforge](https://conda-forge.org/download/) recommended).
-- [Lemonade Server](https://lemonade-server.ai) installed and running, with at least one model downloaded.
-- Chromium-based web browser.
-
 ## Installation
+
+### Windows
+
+Navigate to the [Releases page](https://github.com/lemonade-sdk/lemonade-arcade/releases), download the .exe, and get started!
+
+### Linux (and Windows Devs)
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/lemonade-sdk/lemonade
+   git clone https://github.com/lemonade-sdk/lemonade-arcade
    cd lemonade-arcade
    ```
 
@@ -42,35 +103,14 @@ To run these, you will need a computer with at least 32 GB of system RAM and/or 
    pip install -e .
    ```
 
-3. Make sure Lemonade Server is running with at least one coding LLM installed.
-
-## Usage
-
-1. Start Lemonade Arcade:
+3. Run it:
    ```bash
    lemonade-arcade
    ```
 
-2. The application will automatically open in your web browser at `http://localhost:8080`.
+## Architecture
 
-3. Check that the status indicator shows Lemonade Server is online (🍋).
-
-4. Select a model from the dropdown.
-
-5. Enter a game description in the prompt box, for example:
-   - "Create a snake game but the food moves around"
-   - "Make space invaders with rainbow colors"
-   - "Build a simple platformer where you collect coins"
-
-6. Click "Create Game" and watch the magic happen!
-
-7. Once generated, the game will automatically launch and be added to your library.
-
-8. Click any game in your library to play it again.
-
-9. Hover over games and click the X button to delete games you no longer want. Right click games to get their Python source code and prompt.
-
-## Game Generation
+### Game Generation
 
 Games are generated with the following constraints:
 - Pure Python using the pygame library only.
@@ -79,9 +119,9 @@ Games are generated with the following constraints:
 - Proper event handling and game loops.
 - Visual appeal using pygame's built-in drawing functions.
 
-> Note: LLMs are imperfect, and may fail to generate the game you asked for or fail to generate a functioning game at all. Code-tuned LLMs of size 24B or larger are strongly recommended.
+> Note: LLMs are imperfect, and may fail to generate the game you asked for or fail to generate a functioning game at all.
 
-## Game Cache
+### Game Cache
 
 Games are cached under the `.lemonade-arcade` folder in your home directory.
 
@@ -124,16 +164,15 @@ Contributions are welcome! Feel free to:
 - Submit pull requests for improvements.
 - Share interesting game prompts and results.
 
-## License
+## License and Attribution
 
-This project is licensed under the [MIT license](./LICENSE).
+This project is licensed under the [MIT license](./LICENSE). It was built with Python with ❤️ for the gaming and LLM communities. It is built on the shoulders of many great open source tools, including llama.cpp, Hugging Face Hub, and OpenAI API.
+
+Most of the code for this project was generated by Claude Sonnet 4.
 
 ## Maintainer
 
 This project is maintained by @jeremyfowers.
 
-## Notice
-
-Most of the code for this project was generated by AI.
 
 <!--Copyright (c) 2025 AMD-->
