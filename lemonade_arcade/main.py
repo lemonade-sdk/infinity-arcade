@@ -47,7 +47,7 @@ def get_resource_path(relative_path):
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
         # In PyInstaller bundle, resources are under lemonade_arcade/
-        if relative_path in ["static", "templates"]:
+        if relative_path in ["static", "templates", "builtin_games"]:
             return os.path.join(base_path, "lemonade_arcade", relative_path)
         else:
             return os.path.join(base_path, relative_path)
@@ -785,7 +785,7 @@ async def load_required_model():
         return {"success": False, "message": error_msg}
 
 
-async def generate_game_title(prompt: str, model: str) -> str:
+async def generate_game_title(prompt: str) -> str:
     """Generate a short title for the game based on the prompt."""
     logger.debug(f"Generating title for prompt: {prompt[:50]}...")
 
@@ -812,7 +812,7 @@ Return ONLY the title, nothing else."""
             response = await client.post(
                 f"{LEMONADE_SERVER_URL}/api/v1/chat/completions",
                 json={
-                    "model": model,
+                    "model": REQUIRED_MODEL,
                     "messages": messages,
                     "stream": False,
                     "max_tokens": 20,
@@ -882,8 +882,8 @@ def launch_game(game_id: str):
     # Check if it's a built-in game
     if game_id in BUILTIN_GAMES:
         # For built-in games, use the file from the builtin_games directory
-        builtin_games_dir = Path(__file__).parent / "builtin_games"
-        game_file = builtin_games_dir / BUILTIN_GAMES[game_id]["file"]
+        builtin_games_dir = get_resource_path("builtin_games")
+        game_file = Path(builtin_games_dir) / BUILTIN_GAMES[game_id]["file"]
         logger.debug(f"Looking for built-in game file at: {game_file}")
     else:
         # For user-generated games, use the standard games directory
@@ -1155,9 +1155,8 @@ async def create_game_endpoint(request: Request):
 
     data = await request.json()
     prompt = data.get("prompt", "")
-    model = data.get("model", "")
 
-    logger.debug(f"Received request - prompt: '{prompt[:50]}...', model: '{model}'")
+    logger.debug(f"Received request - prompt: '{prompt[:50]}...'")
 
     if not prompt:
         logger.error("No prompt provided")
@@ -1208,7 +1207,7 @@ Generate ONLY the Python code in a single code block. Do not include any explana
                     "POST",
                     f"{LEMONADE_SERVER_URL}/api/v1/chat/completions",
                     json={
-                        "model": model,
+                        "model": REQUIRED_MODEL,
                         "messages": messages,
                         "stream": True,
                         "max_tokens": 4000,
@@ -1295,7 +1294,7 @@ Generate ONLY the Python code in a single code block. Do not include any explana
             yield f"data: {json.dumps({'type': 'status', 'message': 'Creating title...'})}\n\n"
             logger.debug("Generating game title")
 
-            game_title = await generate_game_title(prompt, model)
+            game_title = await generate_game_title(prompt)
 
             # Save metadata
             GAME_METADATA[game_id] = {

@@ -44,6 +44,7 @@ a = Analysis(
         # Include static files and templates
         ('lemonade_arcade/static', 'lemonade_arcade/static'),
         ('lemonade_arcade/templates', 'lemonade_arcade/templates'),
+        ('lemonade_arcade/builtin_games', 'lemonade_arcade/builtin_games'),
     ],
     hiddenimports=[
         'uvicorn.lifespan.on',

@@ -118,7 +118,6 @@ class SetupManager {
         
         // Load the main interface data
         checkServerStatus();
-        loadModels();
         loadGames();
     }
 
@@ -1169,27 +1168,6 @@ async function checkServerStatus() {
     }
 }
 
-// Load available models
-async function loadModels() {
-    try {
-        const response = await fetch('/api/models');
-        const models = await response.json();
-        const select = document.getElementById('modelSelect');
-        
-        // Hide the model selector since we're using a fixed model
-        select.style.display = 'none';
-        
-        // Set the required model as selected (for any code that might still read it)
-        const requiredModel = "Qwen3-Coder-30B-A3B-Instruct-GGUF";
-        select.innerHTML = `<option value="${requiredModel}" selected>${requiredModel}</option>`;
-        
-    } catch (error) {
-        const select = document.getElementById('modelSelect');
-        select.style.display = 'none';
-        select.innerHTML = '<option>Error loading models</option>';
-    }
-}
-
 // Load existing games
 async function loadGames() {
     try {
@@ -1275,7 +1253,6 @@ function renderGames() {
 // Create a new game
 async function createGame() {
     const prompt = document.getElementById('promptInput').value.trim();
-    const model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"; // Use the required model directly
     
     if (!prompt || isGenerating) return;
     
@@ -1301,7 +1278,6 @@ async function createGame() {
             },
             body: JSON.stringify({
                 prompt: prompt,
-                model: model
             })
         });
         
