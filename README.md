@@ -48,7 +48,7 @@ Lemonade Arcade uses a 30 billion parameter LLM to generate games, which require
 
 <p align="center">Windows: click this:</p>
 <p align="center">
-   <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/download/v0.1.0/LemonadeArcade-v0.1.0.exe"><img src=https://github.com/lemonade-sdk/assets/blob/main/arcade/exe_icon.png?raw=true alt="Arcade Quick Start"/></a>
+   <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/LemonadeArcade.exe"><img src=https://github.com/lemonade-sdk/assets/blob/main/arcade/exe_icon.png?raw=true alt="Arcade Quick Start"/></a>
 </p>
 
 <p align="center">
