@@ -26,6 +26,9 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+
+LEMONADE_VERSION = "8.1.4"
+
 # Pygame will be imported on-demand to avoid early DLL loading issues
 pygame = None
 
@@ -378,7 +381,7 @@ async def check_lemonade_server_version():
 
         # Check if the version number is allowed
         version_parts = [int(x) for x in version.split(".")]
-        required_parts = [8, 1, 4]
+        required_parts = [int(x) for x in LEMONADE_VERSION.split(".")]
         is_compatible = version_parts >= required_parts
         logger.info(
             f"Version parts: {version_parts}, Required: {required_parts}, Compatible: {is_compatible}"
@@ -388,6 +391,7 @@ async def check_lemonade_server_version():
             "installed": True,
             "version": version,
             "compatible": is_compatible,
+            "required_version": LEMONADE_VERSION,
         }
     else:
         logger.warning(f"Could not extract version from output: '{version_line}'")
@@ -395,6 +399,7 @@ async def check_lemonade_server_version():
             "installed": True,
             "version": "unknown",
             "compatible": False,
+            "required_version": LEMONADE_VERSION,
         }
 
 
@@ -988,6 +993,7 @@ async def installation_status():
         "installed": version_info["installed"],
         "version": version_info["version"],
         "compatible": version_info["compatible"],
+        "required_version": version_info["required_version"],
     }
     logger.info(f"Returning installation status: {result}")
     return JSONResponse(result)

@@ -254,7 +254,7 @@ class SetupManager {
             } else if (status.installed && !status.compatible) {
                 const updateText = envInfo.preferred_method === 'pip' ? 'Update via pip' : 'Update Now';
                 this.updateCheckStatus('installed', 'error', 
-                    `Found version ${status.version}, but version 8.1.3+ is required`,
+                    `Found version ${status.version}, but version ${status.required_version}+ is required`,
                     true, updateText, () => this.installServer(envInfo));
                 return; // Stop here, user needs to take action
             } else {
