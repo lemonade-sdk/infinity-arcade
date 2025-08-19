@@ -3,7 +3,6 @@
 Lemonade Arcade - Main FastAPI application
 """
 
-import asyncio
 import json
 import logging
 import os
@@ -11,26 +10,29 @@ import re
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Pygame will be imported on-demand to avoid early DLL loading issues
-pygame = None
-
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import (
-    HTMLResponse,
     JSONResponse,
     StreamingResponse,
     RedirectResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+# Pygame will be imported on-demand to avoid early DLL loading issues
+pygame = None
+
+if os.environ.get("LEMONADE_ARCADE_MODEL"):
+    REQUIRED_MODEL = os.environ.get("LEMONADE_ARCADE_MODEL")
+else:
+    REQUIRED_MODEL = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
 
 # Set up logging
 logging.basicConfig(
@@ -45,7 +47,7 @@ def get_resource_path(relative_path):
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
         # In PyInstaller bundle, resources are under lemonade_arcade/
-        if relative_path in ["static", "templates"]:
+        if relative_path in ["static", "templates", "builtin_games"]:
             return os.path.join(base_path, "lemonade_arcade", relative_path)
         else:
             return os.path.join(base_path, relative_path)
@@ -200,17 +202,23 @@ def refresh_environment():
         logger.warning(f"Failed to refresh environment: {e}")
 
 
-async def execute_lemonade_server_command(args: List[str], timeout: int = 10, use_popen: bool = False, stdout_file=None, stderr_file=None):
+async def execute_lemonade_server_command(
+    args: List[str],
+    timeout: int = 10,
+    use_popen: bool = False,
+    stdout_file=None,
+    stderr_file=None,
+):
     """
     Execute a lemonade-server command with the appropriate binary/method.
-    
+
     Args:
         args: Command arguments (e.g., ["--version"], ["status"], ["serve"])
         timeout: Timeout in seconds for subprocess.run (ignored for Popen)
         use_popen: If True, use Popen for background processes, otherwise use run
         stdout_file: File object for stdout (only used with use_popen=True)
         stderr_file: File object for stderr (only used with use_popen=True)
-        
+
     Returns:
         For subprocess.run: subprocess.CompletedProcess
         For subprocess.Popen: subprocess.Popen instance
@@ -230,19 +238,23 @@ async def execute_lemonade_server_command(args: List[str], timeout: int = 10, us
             # Windows: Try multiple options including PyInstaller and pip installs
             if not is_pyinstaller_environment():
                 commands_to_try.append(["lemonade-server-dev"] + args)
-            
+
             # Windows traditional commands
-            commands_to_try.extend([
-                ["lemonade-server"] + args,
-                ["lemonade-server.bat"] + args,
-            ])
+            commands_to_try.extend(
+                [
+                    ["lemonade-server"] + args,
+                    ["lemonade-server.bat"] + args,
+                ]
+            )
 
             # Add dynamically discovered Windows paths
             for bin_path in find_lemonade_server_paths():
-                commands_to_try.extend([
-                    [os.path.join(bin_path, "lemonade-server.exe")] + args,
-                    [os.path.join(bin_path, "lemonade-server.bat")] + args,
-                ])
+                commands_to_try.extend(
+                    [
+                        [os.path.join(bin_path, "lemonade-server.exe")] + args,
+                        [os.path.join(bin_path, "lemonade-server.bat")] + args,
+                    ]
+                )
         else:
             # Linux/Unix: Only lemonade-server-dev works (from pip install lemonade-sdk)
             commands_to_try.append(["lemonade-server-dev"] + args)
@@ -250,7 +262,7 @@ async def execute_lemonade_server_command(args: List[str], timeout: int = 10, us
     for i, cmd in enumerate(commands_to_try):
         try:
             logger.info(f"Trying command {i+1}: {cmd}")
-            
+
             if use_popen:
                 # For background processes (like server start)
                 # Convert command list to string for shell=True
@@ -264,12 +276,14 @@ async def execute_lemonade_server_command(args: List[str], timeout: int = 10, us
                     ),
                     shell=True,  # Use shell=True to help with PATH resolution
                 )
-                
+
                 # Store the successful command for future use
                 if not SERVER_COMMAND:
-                    SERVER_COMMAND = cmd[:-len(args)]  # Remove the args to get base command
+                    SERVER_COMMAND = cmd[
+                        : -len(args)
+                    ]  # Remove the args to get base command
                     logger.info(f"Stored server command: {SERVER_COMMAND}")
-                
+
                 return process
             else:
                 # For regular commands with output
@@ -289,9 +303,11 @@ async def execute_lemonade_server_command(args: List[str], timeout: int = 10, us
                 if result.returncode == 0:
                     # Store the successful command for future use
                     if not SERVER_COMMAND:
-                        SERVER_COMMAND = cmd[:-len(args)]  # Remove the args to get base command
+                        SERVER_COMMAND = cmd[
+                            : -len(args)
+                        ]  # Remove the args to get base command
                         logger.info(f"Stored server command: {SERVER_COMMAND}")
-                    
+
                     return result
                 else:
                     logger.warning(
@@ -344,7 +360,7 @@ async def check_lemonade_server_version():
     logger.info("Checking lemonade-server version...")
 
     result = await execute_lemonade_server_command(["--version"])
-    
+
     if result is None:
         logger.error("All lemonade-server commands failed")
         return {"installed": False, "version": None, "compatible": False}
@@ -374,9 +390,7 @@ async def check_lemonade_server_version():
             "compatible": is_compatible,
         }
     else:
-        logger.warning(
-            f"Could not extract version from output: '{version_line}'"
-        )
+        logger.warning(f"Could not extract version from output: '{version_line}'")
         return {
             "installed": True,
             "version": "unknown",
@@ -389,7 +403,7 @@ async def check_lemonade_server_running():
     logger.info("Checking if lemonade-server is running...")
 
     result = await execute_lemonade_server_command(["status"])
-    
+
     if result is None:
         logger.error("All lemonade-server status commands failed")
         return False
@@ -417,21 +431,14 @@ async def start_lemonade_server():
     # Create temp files to capture output for debugging
     import tempfile
 
-    stdout_file = tempfile.NamedTemporaryFile(
-        mode="w+", delete=False, suffix=".log"
-    )
-    stderr_file = tempfile.NamedTemporaryFile(
-        mode="w+", delete=False, suffix=".log"
-    )
+    stdout_file = tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".log")
+    stderr_file = tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".log")
 
     # Use the unified function to start the server
     process = await execute_lemonade_server_command(
-        ["serve"], 
-        use_popen=True, 
-        stdout_file=stdout_file, 
-        stderr_file=stderr_file
+        ["serve"], use_popen=True, stdout_file=stdout_file, stderr_file=stderr_file
     )
-    
+
     if process is None:
         logger.error("All lemonade-server start commands failed")
         stdout_file.close()
@@ -441,17 +448,19 @@ async def start_lemonade_server():
             os.unlink(stderr_file.name)
         except:
             pass
-        return {"success": False, "message": "Failed to start server: all commands failed"}
+        return {
+            "success": False,
+            "message": "Failed to start server: all commands failed",
+        }
 
     # Give the process a moment to start and check if it's still running
     import time
+
     time.sleep(1)
 
     # Check if process is still alive
     if process.poll() is None:
-        logger.info(
-            f"Successfully started lemonade-server with PID: {process.pid}"
-        )
+        logger.info(f"Successfully started lemonade-server with PID: {process.pid}")
         SERVER_PROCESS = process
 
         # Close temp files
@@ -659,23 +668,21 @@ async def get_available_models():
 
 async def check_required_model():
     """Check if the required model is installed."""
-    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
-    logger.info(f"Checking for required model: {required_model}")
+    logger.info(f"Checking for required model: {REQUIRED_MODEL}")
 
     try:
         models = await get_available_models()
-        is_installed = required_model in models
+        is_installed = REQUIRED_MODEL in models
         logger.info(f"Required model installed: {is_installed}")
-        return {"installed": is_installed, "model_name": required_model}
+        return {"installed": is_installed, "model_name": REQUIRED_MODEL}
     except Exception as e:
         logger.error(f"Error checking required model: {e}")
-        return {"installed": False, "model_name": required_model}
+        return {"installed": False, "model_name": REQUIRED_MODEL}
 
 
 async def check_model_loaded():
     """Check if the required model is currently loaded."""
-    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
-    logger.info(f"Checking if model is loaded: {required_model}")
+    logger.info(f"Checking if model is loaded: {REQUIRED_MODEL}")
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -685,13 +692,13 @@ async def check_model_loaded():
                 status_data = response.json()
                 # Check if the required model is the currently loaded model
                 loaded_model = status_data.get("model_loaded", "")
-                is_loaded = loaded_model == required_model
+                is_loaded = loaded_model == REQUIRED_MODEL
                 logger.info(
                     f"Model loaded status: {is_loaded}, current model: {loaded_model}"
                 )
                 return {
                     "loaded": is_loaded,
-                    "model_name": required_model,
+                    "model_name": REQUIRED_MODEL,
                     "current_model": loaded_model,
                 }
             else:
@@ -700,18 +707,17 @@ async def check_model_loaded():
                 )
                 return {
                     "loaded": False,
-                    "model_name": required_model,
+                    "model_name": REQUIRED_MODEL,
                     "current_model": None,
                 }
     except Exception as e:
         logger.error(f"Error checking model loaded status: {e}")
-        return {"loaded": False, "model_name": required_model, "current_model": None}
+        return {"loaded": False, "model_name": REQUIRED_MODEL, "current_model": None}
 
 
 async def install_required_model():
     """Install the required model using the pull endpoint."""
-    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
-    logger.info(f"Installing required model: {required_model}")
+    logger.info(f"Installing required model: {REQUIRED_MODEL}")
 
     try:
         async with httpx.AsyncClient(
@@ -719,15 +725,15 @@ async def install_required_model():
         ) as client:  # 10 minute timeout for model download
             response = await client.post(
                 f"{LEMONADE_SERVER_URL}/api/v1/pull",
-                json={"model_name": required_model},
+                json={"model_name": REQUIRED_MODEL},
                 headers={"Content-Type": "application/json"},
             )
 
             if response.status_code == 200:
-                logger.info(f"Successfully installed model: {required_model}")
+                logger.info(f"Successfully installed model: {REQUIRED_MODEL}")
                 return {
                     "success": True,
-                    "message": f"Model {required_model} installed successfully",
+                    "message": f"Model {REQUIRED_MODEL} installed successfully",
                 }
             else:
                 error_msg = f"Failed to install model: HTTP {response.status_code}"
@@ -747,8 +753,7 @@ async def install_required_model():
 
 async def load_required_model():
     """Load the required model using the load endpoint."""
-    required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
-    logger.info(f"Loading required model: {required_model}")
+    logger.info(f"Loading required model: {REQUIRED_MODEL}")
 
     try:
         async with httpx.AsyncClient(
@@ -756,15 +761,15 @@ async def load_required_model():
         ) as client:  # 10 minute timeout for model loading
             response = await client.post(
                 f"{LEMONADE_SERVER_URL}/api/v1/load",
-                json={"model_name": required_model},
+                json={"model_name": REQUIRED_MODEL},
                 headers={"Content-Type": "application/json"},
             )
 
             if response.status_code == 200:
-                logger.info(f"Successfully loaded model: {required_model}")
+                logger.info(f"Successfully loaded model: {REQUIRED_MODEL}")
                 return {
                     "success": True,
-                    "message": f"Model {required_model} loaded successfully",
+                    "message": f"Model {REQUIRED_MODEL} loaded successfully",
                 }
             else:
                 error_msg = f"Failed to load model: HTTP {response.status_code}"
@@ -780,7 +785,7 @@ async def load_required_model():
         return {"success": False, "message": error_msg}
 
 
-async def generate_game_title(prompt: str, model: str) -> str:
+async def generate_game_title(prompt: str) -> str:
     """Generate a short title for the game based on the prompt."""
     logger.debug(f"Generating title for prompt: {prompt[:50]}...")
 
@@ -807,7 +812,7 @@ Return ONLY the title, nothing else."""
             response = await client.post(
                 f"{LEMONADE_SERVER_URL}/api/v1/chat/completions",
                 json={
-                    "model": model,
+                    "model": REQUIRED_MODEL,
                     "messages": messages,
                     "stream": False,
                     "max_tokens": 20,
@@ -877,8 +882,8 @@ def launch_game(game_id: str):
     # Check if it's a built-in game
     if game_id in BUILTIN_GAMES:
         # For built-in games, use the file from the builtin_games directory
-        builtin_games_dir = Path(__file__).parent / "builtin_games"
-        game_file = builtin_games_dir / BUILTIN_GAMES[game_id]["file"]
+        builtin_games_dir = get_resource_path("builtin_games")
+        game_file = Path(builtin_games_dir) / BUILTIN_GAMES[game_id]["file"]
         logger.debug(f"Looking for built-in game file at: {game_file}")
     else:
         # For user-generated games, use the standard games directory
@@ -1150,9 +1155,8 @@ async def create_game_endpoint(request: Request):
 
     data = await request.json()
     prompt = data.get("prompt", "")
-    model = data.get("model", "")
 
-    logger.debug(f"Received request - prompt: '{prompt[:50]}...', model: '{model}'")
+    logger.debug(f"Received request - prompt: '{prompt[:50]}...'")
 
     if not prompt:
         logger.error("No prompt provided")
@@ -1203,7 +1207,7 @@ Generate ONLY the Python code in a single code block. Do not include any explana
                     "POST",
                     f"{LEMONADE_SERVER_URL}/api/v1/chat/completions",
                     json={
-                        "model": model,
+                        "model": REQUIRED_MODEL,
                         "messages": messages,
                         "stream": True,
                         "max_tokens": 4000,
@@ -1290,7 +1294,7 @@ Generate ONLY the Python code in a single code block. Do not include any explana
             yield f"data: {json.dumps({'type': 'status', 'message': 'Creating title...'})}\n\n"
             logger.debug("Generating game title")
 
-            game_title = await generate_game_title(prompt, model)
+            game_title = await generate_game_title(prompt)
 
             # Save metadata
             GAME_METADATA[game_id] = {

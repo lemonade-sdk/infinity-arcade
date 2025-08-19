@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name="lemonade-arcade",
     version="0.1.0",
     description="AI-powered game generator and arcade using Lemonade Server",
     author="Lemonade SDK",
-    packages=find_packages(),
+    packages=["lemonade_arcade", "lemonade_arcade.builtin_games"],
     install_requires=[
         "fastapi>=0.104.0",
         "uvicorn>=0.24.0",
@@ -26,17 +26,6 @@ setup(
         ],
     },
     python_requires=">=3.8",
-    classifiers=[
-        "Development Status :: 3 - Alpha",
-        "Intended Audience :: Developers",
-        "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
-        "Programming Language :: Python :: 3.12",
-    ],
 )
 
 # Copyright (c) 2025 AMD
