@@ -17,7 +17,7 @@
   <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest" title="Download the latest release">
     <img src="https://img.shields.io/github/v/release/lemonade-sdk/lemonade-arcade?include_prereleases" alt="Latest Release" />
   </a>
-  <a href="https://tooomm.github.io/github-release-stats/?username=lemonade-sdk&repository=lemonade">
+  <a href="https://tooomm.github.io/github-release-stats/?username=lemonade-sdk&repository=lemonade-arcade">
     <img src="https://img.shields.io/github/downloads/lemonade-sdk/lemonade-arcade/total.svg" alt="GitHub downloads" />
   </a>
   <a href="https://github.com/lemonade-sdk/lemonade-arcade/blob/main/LICENSE">
