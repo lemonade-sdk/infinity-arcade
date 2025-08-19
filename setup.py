@@ -2,9 +2,12 @@
 
 from setuptools import setup
 
+with open("lemonade_arcade/version.py", encoding="utf-8") as fp:
+    version = fp.read().split('"')[1]
+
 setup(
     name="lemonade-arcade",
-    version="0.1.0",
+    version=version,
     description="AI-powered game generator and arcade using Lemonade Server",
     author="Lemonade SDK",
     packages=["lemonade_arcade", "lemonade_arcade.builtin_games"],
