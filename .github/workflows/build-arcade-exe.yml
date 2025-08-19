@@ -81,5 +81,5 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: dist/LemonadeArcade.exe
-        asset_name: LemonadeArcade-${{ github.event.release.tag_name }}.exe
+        asset_name: LemonadeArcade.exe
         asset_content_type: application/octet-stream
