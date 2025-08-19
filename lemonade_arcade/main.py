@@ -27,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 
-LEMONADE_VERSION = "8.1.4"
+LEMONADE_VERSION = "8.1.5"
 
 # Pygame will be imported on-demand to avoid early DLL loading issues
 pygame = None
