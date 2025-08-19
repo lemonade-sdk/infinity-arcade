@@ -3,7 +3,6 @@
 Lemonade Arcade - Main FastAPI application
 """
 
-import asyncio
 import json
 import logging
 import os
@@ -11,26 +10,24 @@ import re
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Pygame will be imported on-demand to avoid early DLL loading issues
-pygame = None
-
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import (
-    HTMLResponse,
     JSONResponse,
     StreamingResponse,
     RedirectResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+# Pygame will be imported on-demand to avoid early DLL loading issues
+pygame = None
 
 if os.environ.get("LEMONADE_CI_MODE"):
     REQUIRED_MODEL = "Qwen3-0.6B-GGUF"
