@@ -376,9 +376,9 @@ async def check_lemonade_server_version():
         version = version_match.group(1)
         logger.info(f"Extracted version: {version}")
 
-        # Check if version >= 8.1.3
+        # Check if the version number is allowed
         version_parts = [int(x) for x in version.split(".")]
-        required_parts = [8, 1, 3]
+        required_parts = [8, 1, 4]
         is_compatible = version_parts >= required_parts
         logger.info(
             f"Version parts: {version_parts}, Required: {required_parts}, Compatible: {is_compatible}"
