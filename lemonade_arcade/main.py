@@ -29,8 +29,8 @@ from fastapi.templating import Jinja2Templates
 # Pygame will be imported on-demand to avoid early DLL loading issues
 pygame = None
 
-if os.environ.get("LEMONADE_CI_MODE"):
-    REQUIRED_MODEL = "Qwen3-0.6B-GGUF"
+if os.environ.get("LEMONADE_ARCADE_MODEL"):
+    REQUIRED_MODEL = os.environ.get("LEMONADE_ARCADE_MODEL")
 else:
     REQUIRED_MODEL = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
 
