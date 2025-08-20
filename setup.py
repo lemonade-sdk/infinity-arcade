@@ -10,6 +10,7 @@ setup(
     version=version,
     description="AI-powered game generator and arcade using Lemonade Server",
     author="Lemonade SDK",
+    author_email="lemonade@amd.com",
     packages=["lemonade_arcade", "lemonade_arcade.builtin_games"],
     install_requires=[
         "fastapi>=0.104.0",
@@ -31,6 +32,8 @@ setup(
     package_data={
         "lemonade_arcade": ["static/**/*", "templates/**/*"],
     },
+    long_description=open("README.md", "r", encoding="utf-8").read(),
+    long_description_content_type="text/markdown",
 )
 
 # Copyright (c) 2025 AMD
