@@ -28,6 +28,9 @@ setup(
         ],
     },
     python_requires=">=3.8",
+    package_data={
+        "lemonade_arcade": ["static/**/*", "templates/**/*"],
+    },
 )
 
 # Copyright (c) 2025 AMD

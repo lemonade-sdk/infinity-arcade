@@ -27,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 
-LEMONADE_VERSION = "8.1.4"
+LEMONADE_VERSION = "8.1.5"
 
 # Pygame will be imported on-demand to avoid early DLL loading issues
 pygame = None
@@ -278,6 +278,7 @@ async def execute_lemonade_server_command(
                         subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
                     ),
                     shell=True,  # Use shell=True to help with PATH resolution
+                    env=os.environ.copy(),  # Pass current environment
                 )
 
                 # Store the successful command for future use
@@ -298,6 +299,7 @@ async def execute_lemonade_server_command(
                     text=True,
                     timeout=timeout,
                     shell=True,  # Use shell=True to help with PATH resolution
+                    env=os.environ.copy(),  # Pass current environment
                 )
                 logger.info(f"Command {i+1} returned code: {result.returncode}")
                 logger.info(f"Command {i+1} stdout: '{result.stdout}'")
@@ -366,7 +368,12 @@ async def check_lemonade_server_version():
 
     if result is None:
         logger.error("All lemonade-server commands failed")
-        return {"installed": False, "version": None, "compatible": False}
+        return {
+            "installed": False,
+            "version": None,
+            "compatible": False,
+            "required_version": LEMONADE_VERSION,
+        }
 
     version_line = result.stdout.strip()
     logger.info(f"Raw version output: '{version_line}'")

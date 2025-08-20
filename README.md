@@ -92,6 +92,15 @@ Navigate to the [Releases page](https://github.com/lemonade-sdk/lemonade-arcade/
 
 ### Linux (and Windows Devs)
 
+From PyPI (recommended):
+
+```bash
+pip install lemonade-arcade
+lemonade-arcade
+```
+
+From Source:
+
 1. Clone this repository:
    ```bash
    git clone https://github.com/lemonade-sdk/lemonade-arcade
