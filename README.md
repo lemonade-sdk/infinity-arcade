@@ -39,7 +39,7 @@ Lemonade Arcade uses a 30 billion parameter LLM to generate games, which require
 
 | Configuration | GPU/APU | Memory | Disk Space |
 |---------------|---------|---------|---------|
-| **Minimum (CPU)** | Ryzen AI 7000-series chip or newer | 64 GB RAM | 20 GB |
+| **Minimum (CPU)** | Ryzen AI 7000-series chip or newer | 32 GB RAM | 20 GB |
 | **Suggested (dGPU)** | Radeon 7800XT or newer | 16 GB VRAM | 20 GB |
 | **Suggested (APU)** | Strix Halo (Ryzen AI MAX 395) | 64 GB unified memory | 20 GB |
 
