@@ -53,15 +53,23 @@
     text-align: center;
 }
 
-.banner-container {
+.ascii-banner {
     margin-bottom: 40px;
+    text-align: center;
 }
 
-.banner-img {
-    max-width: 800px;
-    width: 100%;
-    height: auto;
-    filter: drop-shadow(0 0 10px rgba(0, 255, 65, 0.5));
+.ascii-banner pre {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    font-weight: bold;
+    color: #00ff41;
+    text-shadow: 0 0 10px #00ff41, 0 0 20px #00ff41;
+    letter-spacing: 1px;
+    line-height: 1.0;
+    margin: 0;
+    padding: 0;
+    white-space: pre;
+    overflow-x: auto;
 }
 
 @keyframes gentle-glow {
@@ -357,8 +365,10 @@
         gap: 20px;
     }
 
-    .banner-img {
-        max-width: 90%;
+    .ascii-banner pre {
+        font-size: 0.5rem;
+        overflow-x: auto;
+        white-space: pre;
     }
 }
 
