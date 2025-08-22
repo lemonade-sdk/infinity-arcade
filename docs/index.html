@@ -13,12 +13,10 @@
         <header class="homepage-header">
             <nav class="nav-links">
                 <a href="https://github.com/lemonade-sdk/lemonade-arcade" class="nav-link" target="_blank" rel="noopener noreferrer">
-                    <span class="nav-icon">🐙</span>
-                    GitHub
+                    <img src="https://img.shields.io/github/v/release/lemonade-sdk/lemonade-arcade?style=flat-square&logo=github&label=GitHub&color=00ff41&labelColor=1a1a2e&logoColor=white" alt="GitHub">
                 </a>
                 <a href="https://discord.gg/5xXzkMu8Zk" class="nav-link" target="_blank" rel="noopener noreferrer">
-                    <span class="nav-icon">💬</span>
-                    Discord
+                    <img src="https://img.shields.io/badge/Join-Discord-00ff41?style=flat-square&logo=discord&labelColor=1a1a2e&logoColor=white" alt="Join Discord">
                 </a>
             </nav>
         </header>
@@ -30,7 +28,7 @@
             </div>
 
             <h1 class="hero-subtitle">
-                Create Amazing Games with AI-Powered Development
+                Create Amazing Games with AI
             </h1>
 
             <p class="hero-description">
@@ -39,10 +37,19 @@
             </p>
 
             <div class="cta-section">
-                <a href="#download-link" class="download-btn" id="downloadBtn">
-                    <span class="download-icon">⬇️</span>
-                    Download Now
-                </a>
+                <div class="download-section">
+                    <div class="download-option">
+                        <span class="platform-label">Windows</span>
+                        <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/LemonadeArcade.exe" class="download-btn windows-download" id="windowsDownloadBtn">
+                            <img src="https://raw.githubusercontent.com/lemonade-sdk/assets/main/arcade/exe_icon.png" alt="Download" class="download-icon">
+                        </a>
+                    </div>
+                    
+                    <div class="download-option">
+                        <span class="platform-label-linux">Linux</span>
+                        <a href="https://github.com/lemonade-sdk/lemonade-arcade#linux-and-windows-devs" class="linux-link" target="_blank" rel="noopener noreferrer">Click Here</a>
+                    </div>
+                </div>
 
                 <div class="game-preview">
                     <img src="https://github.com/lemonade-sdk/assets/raw/main/arcade/space_invaders_x.gif?raw=true" 
@@ -86,11 +93,9 @@
         <footer class="footer-section">
             <div class="footer-links">
                 <a href="https://github.com/lemonade-sdk/lemonade-arcade" class="footer-link" target="_blank" rel="noopener noreferrer">
-                    <span>🐙</span>
                     View on GitHub
                 </a>
                 <a href="https://discord.gg/5xXzkMu8Zk" class="footer-link" target="_blank" rel="noopener noreferrer">
-                    <span>💬</span>
                     Join Discord
                 </a>
             </div>
@@ -121,14 +126,14 @@
                 });
             });
 
-            // Download button click handler (update the link as needed)
-            const downloadBtn = document.getElementById('downloadBtn');
-            downloadBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                // Replace this with your actual download link
-                alert('Please update the download link in the JavaScript!\n\nCurrent placeholder: #download-link');
-                // window.open('https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/LemonadeArcade.exe', '_blank');
-            });
+            // Download button click handler
+            const windowsDownloadBtn = document.getElementById('windowsDownloadBtn');
+            if (windowsDownloadBtn) {
+                windowsDownloadBtn.addEventListener('click', function(e) {
+                    // The link will work automatically, no need to prevent default
+                    console.log('Windows download initiated');
+                });
+            }
 
             // Navigation link handlers
             const discordLinks = document.querySelectorAll('a[href="#discord-link"]');

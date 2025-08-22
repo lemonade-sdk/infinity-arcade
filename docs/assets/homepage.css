@@ -22,25 +22,21 @@
 }
 
 .nav-link {
-    color: #00ff41;
     text-decoration: none;
-    font-size: 1.1rem;
-    font-weight: bold;
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 15px;
-    border: 2px solid transparent;
     border-radius: 5px;
 }
 
-.nav-link:hover {
-    color: #00ffff;
-    border-color: #00ff41;
-    background: rgba(0, 255, 65, 0.1);
+.nav-link img {
+    height: 28px;
+    transition: all 0.3s ease;
+    border-radius: 3px;
+}
+
+.nav-link:hover img {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 255, 65, 0.3);
 }
 
 .nav-icon {
@@ -65,8 +61,7 @@
     max-width: 800px;
     width: 100%;
     height: auto;
-    filter: drop-shadow(0 0 20px rgba(0, 255, 65, 0.5));
-    animation: gentle-glow 3s ease-in-out infinite alternate;
+    filter: drop-shadow(0 0 10px rgba(0, 255, 65, 0.5));
 }
 
 @keyframes gentle-glow {
@@ -86,7 +81,7 @@
 .hero-description {
     font-size: 1.1rem;
     color: #cccccc;
-    margin-bottom: 50px;
+    margin-bottom: 40px;
     max-width: 600px;
     line-height: 1.7;
 }
@@ -98,24 +93,90 @@
     gap: 30px;
 }
 
-.download-btn {
-    background: linear-gradient(145deg, #00ff41, #00cc33);
-    color: #000;
-    border: 3px solid #00ff41;
-    padding: 20px 50px;
-    font-size: 1.3rem;
-    font-weight: bold;
-    text-decoration: none;
-    border-radius: 10px;
-    transition: all 0.3s ease;
-    display: inline-flex;
+.download-section {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 60px;
+    border-radius: 20px;
+    padding: 40px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.download-option {
+    display: flex;
+    flex-direction: column;
     align-items: center;
     gap: 15px;
-    box-shadow: 0 5px 20px rgba(0, 255, 65, 0.4);
+    flex: 1;
+}
+
+.platform-label {
+    color: #00ff41;
+    font-size: 1.2rem;
+    font-weight: bold;
+    text-align: center;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+}
+.platform-label-linux {
+    color: #00ff41;
+    font-size: 1.2rem;
+    font-weight: bold;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+}
+
+.linux-link {
+    color: #00ff41;
+    text-decoration: none;
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 20px 15px;
+    border: 1px solid #00ff41;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.download-btn {
+    color: #000;
+    font-size: 1rem;
+    font-weight: bold;
+    text-decoration: none;
+    border-radius: 15px;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
     position: relative;
     overflow: hidden;
+    min-width: 200px;
+    backdrop-filter: blur(5px);
+}
+
+.download-icon {
+    width: 86px;
+    height: 86px;
+}
+
+.download-filename {
+    font-size: 0.9rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: none;
+    opacity: 0.9;
 }
 
 .download-btn::before {
@@ -129,18 +190,11 @@
     transition: left 0.6s;
 }
 
-.download-btn:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 30px rgba(0, 255, 65, 0.6);
-    background: linear-gradient(145deg, #33ff66, #00ff41);
-}
-
-.download-btn:hover::before {
-    left: 100%;
-}
-
-.download-icon {
-    font-size: 1.5rem;
+.download-filename {
+    font-size: 0.9rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: none;
 }
 
 .game-preview {
@@ -154,7 +208,6 @@
     max-width: 800px;
     width: 100%;
     height: auto;
-    box-shadow: 0 10px 30px rgba(0, 255, 65, 0.4);
     transition: all 0.3s ease;
     filter: drop-shadow(0 0 15px rgba(0, 255, 65, 0.3));
 }
@@ -176,17 +229,9 @@
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 10px 10px rgba(0, 255, 65, 0.4);
     transition: all 0.3s ease;
-    filter: drop-shadow(0 0 15px rgba(0, 255, 65, 0.3));
+    filter: drop-shadow(0 0 5px rgba(0, 255, 65, 0.3));
 }
-
-/* .feature-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 15px 30px rgba(0, 255, 65, 0.3);
-    border-color: #00ffff;
-    background: rgba(0, 0, 0, 0.8);
-} */
 
 .feature-icon {
     font-size: 3rem;
@@ -272,7 +317,28 @@
     }
 
     .download-btn {
-        padding: 15px 30px;
+        padding: 15px 25px;
+        min-width: 150px;
+    }
+
+    .download-section {
+        flex-direction: column;
+        gap: 30px;
+        padding: 25px;
+        margin: 0 10px;
+    }
+
+    .download-btn {
+        padding: 20px 25px;
+        min-width: 160px;
+    }
+
+    .download-icon {
+        width: 56px;
+        height: 56px;
+    }
+
+    .platform-label {
         font-size: 1.1rem;
     }
 
