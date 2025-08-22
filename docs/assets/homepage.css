@@ -1,3 +1,11 @@
+html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #000 !important;
+}
+
 /* Homepage specific styles */
 .homepage-container {
     display: flex;
