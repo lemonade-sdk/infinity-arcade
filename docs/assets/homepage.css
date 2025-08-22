@@ -54,8 +54,9 @@
 }
 
 .ascii-banner {
-    margin-bottom: 40px;
+    margin-bottom: 20px;
     text-align: center;
+    padding: 10px 20px;
 }
 
 .ascii-banner pre {
@@ -65,11 +66,12 @@
     color: #00ff41;
     text-shadow: 0 0 10px #00ff41, 0 0 20px #00ff41;
     letter-spacing: 1px;
-    line-height: 1.0;
-    margin: 0;
-    padding: 0;
+    line-height: 1.1;
+    margin: 10px 0;
+    padding: 10px;
     white-space: pre;
-    overflow-x: auto;
+    overflow: visible;
+    display: inline-block;
 }
 
 @keyframes gentle-glow {
