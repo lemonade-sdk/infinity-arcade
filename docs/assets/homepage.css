@@ -30,13 +30,16 @@
 }
 
 .nav-link img {
-    height: 28px;
+    height: 24px;
     transition: all 0.3s ease;
     border-radius: 3px;
+    opacity: 0.8;
 }
 
 .nav-link:hover img {
     transform: translateY(-2px);
+    opacity: 1;
+    box-shadow: 0 2px 8px rgba(0, 255, 65, 0.2);
 }
 
 .nav-icon {
