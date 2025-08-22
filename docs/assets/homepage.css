@@ -162,12 +162,13 @@
 }
 
 .download-btn {
-    background: linear-gradient(145deg, #00ff41, #00cc33);
-    color: #000;
+    background: transparent;
+    color: #00ff41;
     font-size: 1rem;
     font-weight: bold;
     text-decoration: none;
     border-radius: 12px;
+    border: 2px solid #00ff41;
     transition: all 0.3s ease;
     display: inline-flex;
     flex-direction: row;
@@ -178,28 +179,19 @@
     letter-spacing: 1px;
     position: relative;
     overflow: hidden;
-    min-width: 160px;
+    width: 180px;
+    height: 60px;
     padding: 15px 25px;
-    box-shadow: 0 4px 15px rgba(0, 255, 65, 0.3);
+    box-shadow: 0 2px 10px rgba(0, 255, 65, 0.2);
+    box-sizing: border-box;
 }
 
 .download-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 255, 65, 0.5);
-    background: linear-gradient(145deg, #00cc33, #00ff41);
-}
-
-.download-btn.secondary-download {
-    background: transparent;
-    border: 2px solid #00ff41;
-    color: #00ff41;
-    box-shadow: 0 2px 10px rgba(0, 255, 65, 0.2);
-}
-
-.download-btn.secondary-download:hover {
     background: rgba(0, 255, 65, 0.1);
     border-color: #00cc33;
     color: #00cc33;
+    box-shadow: 0 4px 15px rgba(0, 255, 65, 0.3);
 }
 
 .download-icon {
