@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lemonade Arcade - AI Game Development Made Easy</title>
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
     <link rel="stylesheet" href="../lemonade_arcade/static/style.css">
     <link rel="stylesheet" href="assets/homepage.css">
 </head>
@@ -40,26 +41,35 @@
             </div>
 
             <h1 class="hero-subtitle">
-                Create Amazing Games with AI
+                Create amazing games with AI
             </h1>
 
             <p class="hero-description">
-                Lemonade Arcade uses local LLMs to create retro games in minutes. 
+                Lemonade Arcade uses local LLMs to create retro-style games in minutes. 
                 Build and play new games where the limit is your creativity.
             </p>
 
             <div class="cta-section">
                 <div class="download-section">
                     <div class="download-option">
-                        <span class="platform-label">Windows</span>
-                        <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/LemonadeArcade.exe" class="download-btn windows-download" id="windowsDownloadBtn">
-                            <img src="https://raw.githubusercontent.com/lemonade-sdk/assets/main/arcade/exe_icon.png" alt="Download" class="download-icon">
+                        <div class="platform-header">
+                            <span class="platform-label">Windows</span>
+                            <span class="platform-desc">Ready to run executable</span>
+                        </div>
+                        <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/LemonadeArcade.exe" class="download-btn primary-download" id="windowsDownloadBtn">
+                            <img src="assets/favicon.ico" alt="Download" class="download-icon">
+                            <span class="download-text">Download</span>
                         </a>
                     </div>
                     
                     <div class="download-option">
-                        <span class="platform-label-linux">Linux</span>
-                        <a href="https://github.com/lemonade-sdk/lemonade-arcade#linux-and-windows-devs" class="linux-link" target="_blank" rel="noopener noreferrer">Click Here</a>
+                        <div class="platform-header">
+                            <span class="platform-label">Linux</span>
+                            <span class="platform-desc">Install via Python package</span>
+                        </div>
+                        <a href="https://github.com/lemonade-sdk/lemonade-arcade#linux-and-windows-devs" class="download-btn secondary-download" target="_blank" rel="noopener noreferrer">
+                            <span class="download-text">PyPI Setup</span>
+                        </a>
                     </div>
                 </div>
 
