@@ -243,13 +243,11 @@
     border-radius: 15px;
     border: 1px solid rgba(0, 255, 65, 0.2);
     backdrop-filter: blur(10px);
-    filter: drop-shadow(0 0 8px rgba(0, 255, 65, 0.2));
 }
 
 .feature-card:hover {
     border-color: rgba(0, 255, 65, 0.5);
     background: rgba(0, 0, 0, 0.8);
-    filter: drop-shadow(0 0 15px rgba(0, 255, 65, 0.4));
 }
 
 .feature-icon {
