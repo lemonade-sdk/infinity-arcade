@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lemonade Arcade - AI Game Development Made Easy</title>
+    <link rel="stylesheet" href="../lemonade_arcade/static/style.css">
+    <link rel="stylesheet" href="assets/homepage.css">
+</head>
+<body>
+    <div class="homepage-container">
+        <!-- Header -->
+        <header class="homepage-header">
+            <nav class="nav-links">
+                <a href="https://github.com/lemonade-sdk/lemonade-arcade" class="nav-link" target="_blank" rel="noopener noreferrer">
+                    <span class="nav-icon">🐙</span>
+                    GitHub
+                </a>
+                <a href="https://discord.gg/5xXzkMu8Zk" class="nav-link" target="_blank" rel="noopener noreferrer">
+                    <span class="nav-icon">💬</span>
+                    Discord
+                </a>
+            </nav>
+        </header>
+
+        <!-- Hero Section -->
+        <main class="hero-section">
+            <div class="banner-container">
+                <img src="../img/banner.png" alt="Lemonade Arcade Banner" class="banner-img">
+            </div>
+
+            <h1 class="hero-subtitle">
+                Create Amazing Games with AI-Powered Development
+            </h1>
+
+            <p class="hero-description">
+                Lemonade Arcade uses local LLMs to create retro games in minutes. 
+                Build and play new games where the limit is your creativity.
+            </p>
+
+            <div class="cta-section">
+                <a href="#download-link" class="download-btn" id="downloadBtn">
+                    <span class="download-icon">⬇️</span>
+                    Download Now
+                </a>
+
+                <div class="game-preview">
+                    <img src="https://github.com/lemonade-sdk/assets/raw/main/arcade/space_invaders_x.gif?raw=true" 
+                         alt="Space Invaders Game Preview" 
+                         class="game-preview-gif">
+                </div>
+
+                <div class="ascii-decoration">
+                    <pre>▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄</pre>
+                </div>
+
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <span class="feature-icon">🤖</span>
+                        <h3 class="feature-title">AI-Powered</h3>
+                        <p class="feature-description">
+                            Use AI to relive nostalgic games or generate new ones!
+                        </p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <span class="feature-icon">⚡</span>
+                        <h3 class="feature-title">Instant Gratification</h3>
+                        <p class="feature-description">
+                            From idea to playable game in minutes.
+                        </p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <span class="feature-icon">🎮</span>
+                        <h3 class="feature-title">Game Ready</h3>
+                        <p class="feature-description">
+                            Built-in games included. Get inspired.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer-section">
+            <div class="footer-links">
+                <a href="https://github.com/lemonade-sdk/lemonade-arcade" class="footer-link" target="_blank" rel="noopener noreferrer">
+                    <span>🐙</span>
+                    View on GitHub
+                </a>
+                <a href="https://discord.gg/5xXzkMu8Zk" class="footer-link" target="_blank" rel="noopener noreferrer">
+                    <span>💬</span>
+                    Join Discord
+                </a>
+            </div>
+            
+            <div class="ascii-decoration">
+                <pre>░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░</pre>
+            </div>
+            
+            <div class="copyright">
+                <p>&copy; 2025 AMD - Lemonade Arcade. All rights reserved.</p>
+                <p>Empowering developers with AI-driven game creation.</p>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Add some interactive effects
+        document.addEventListener('DOMContentLoaded', function() {
+            // Feature cards hover effect enhancement
+            const featureCards = document.querySelectorAll('.feature-card');
+            featureCards.forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-10px) rotateY(5deg)';
+                });
+                
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0) rotateY(0)';
+                });
+            });
+
+            // Download button click handler (update the link as needed)
+            const downloadBtn = document.getElementById('downloadBtn');
+            downloadBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                // Replace this with your actual download link
+                alert('Please update the download link in the JavaScript!\n\nCurrent placeholder: #download-link');
+                // window.open('https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/LemonadeArcade.exe', '_blank');
+            });
+
+            // Navigation link handlers
+            const discordLinks = document.querySelectorAll('a[href="#discord-link"]');
+            discordLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    alert('Please update the Discord invite link!\n\nCurrent placeholder: #discord-link');
+                    // window.open('https://discord.gg/your-server', '_blank');
+                });
+            });
+
+            // Add typing effect to subtitle
+            const subtitle = document.querySelector('.hero-subtitle');
+            const originalText = subtitle.textContent;
+            subtitle.textContent = '';
+            
+            let i = 0;
+            const typeWriter = () => {
+                if (i < originalText.length) {
+                    subtitle.textContent += originalText.charAt(i);
+                    i++;
+                    setTimeout(typeWriter, 50);
+                } else {
+                    // Add cursor blink effect
+                    subtitle.style.borderRight = '3px solid #00ff41';
+                    subtitle.style.animation = 'blink 1s infinite';
+                }
+            };
+            
+            // Start typing effect after a short delay
+            setTimeout(typeWriter, 1000);
+        });
+    </script>
+</body>
+</html>
