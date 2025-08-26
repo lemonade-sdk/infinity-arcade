@@ -6,6 +6,7 @@ import os
 import subprocess
 import tempfile
 import httpx
+import platform
 
 # Add the lemonade_arcade package to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "lemonade_arcade"))
@@ -43,6 +44,7 @@ class TestLemonadeClient(unittest.TestCase):
         result = self.client.is_pyinstaller_environment()
         self.assertFalse(result)
 
+    @unittest.skipIf(platform.system() != "Windows", "Windows-specific test")
     @patch("os.path.exists")
     @patch("os.environ.get")
     def test_find_lemonade_server_paths_windows(self, mock_env_get, mock_exists):
@@ -124,6 +126,7 @@ class TestLemonadeClient(unittest.TestCase):
         self.assertIsNone(self.client.server_command)
         self.assertIsNone(self.client.server_process)
 
+    @unittest.skipIf(platform.system() != "Windows", "Windows-specific test")
     @patch("winreg.OpenKey")
     @patch("winreg.QueryValueEx")
     @patch("os.environ")
@@ -145,6 +148,7 @@ class TestLemonadeClient(unittest.TestCase):
         expected_path = "C:\\Users\\User\\bin;C:\\Windows\\System32;C:\\Program Files"
         mock_environ.__setitem__.assert_called_with("PATH", expected_path)
 
+    @unittest.skipIf(platform.system() != "Windows", "Windows-specific test")
     @patch("winreg.OpenKey")
     @patch("winreg.QueryValueEx")
     def test_refresh_environment_windows_no_user_path(self, mock_query, mock_open_key):
@@ -161,6 +165,7 @@ class TestLemonadeClient(unittest.TestCase):
             # Should still set PATH to system PATH only
             mock_environ.__setitem__.assert_called_with("PATH", "C:\\Windows\\System32")
 
+    @unittest.skipIf(platform.system() != "Windows", "Windows-specific test")
     @patch("winreg.OpenKey")
     def test_refresh_environment_windows_exception(self, mock_open_key):
         """Test refreshing environment variables when registry access fails."""
@@ -188,6 +193,7 @@ class TestLemonadeClient(unittest.TestCase):
             args, kwargs = mock_run.call_args
             self.assertIn("lemonade-server --version", args[0])
 
+    @unittest.skipIf(platform.system() != "Windows", "Windows-specific test")
     async def test_execute_lemonade_server_command_windows_success(self):
         """Test executing command on Windows with successful result."""
         with patch("sys.platform", "win32"), patch.object(

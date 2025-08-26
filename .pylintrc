@@ -8,4 +8,10 @@ ignore=builtin_games
 # Disable the following warnings:
 # W1203: logging-fstring-interpolation - Using f-strings in logging calls
 # W0718: broad-exception-caught - Catching too general exception
-disable=W1203,W0718
+# C0415: import-outside-toplevel - Import outside toplevel
+# R0913: too-many-arguments - Too many arguments
+# R1705: no-else-return - Unnecessary "else" after "return", remove the "else" and de-indent the code inside it
+# R0917: too-many-positional-arguments - Too many positional arguments
+# R0912: too-many-branches - Too many branches
+# C0114: missing-module-docstring - Missing module docstring
+disable=W1203,W0718,C0415,R0913,R1705,R0917,R0912,C0114

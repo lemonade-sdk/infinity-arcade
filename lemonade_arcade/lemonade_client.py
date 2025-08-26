@@ -1,3 +1,7 @@
+"""
+Defines the LemonadeClient class.
+"""
+
 import logging
 import os
 import subprocess
@@ -13,6 +17,12 @@ logger = logging.getLogger("lemonade_arcade.main")
 
 
 class LemonadeClient:
+    """
+    Detect, install, and set up Lemonade Client.
+    This class makes it easier to start a new Python project with Lemonade
+    by automating many common tasks.
+    """
+
     def __init__(self):
         # Track which command is used for this server instance
         self.server_command = None
@@ -50,7 +60,7 @@ class LemonadeClient:
         if self.server_process and self.server_process.poll() is None:
             try:
                 self.server_process.terminate()
-            except:
+            except Exception:
                 pass
         self.server_process = None
 
@@ -183,6 +193,7 @@ class LemonadeClient:
                         timeout=timeout,
                         shell=True,  # Use shell=True to help with PATH resolution
                         env=os.environ.copy(),  # Pass current environment
+                        check=True,
                     )
                     logger.info(f"Command {i+1} returned code: {result.returncode}")
                     logger.info(f"Command {i+1} stdout: '{result.stdout}'")
@@ -233,6 +244,7 @@ class LemonadeClient:
                 text=True,
                 timeout=10,
                 shell=True,  # Use shell=True to get updated environment after pip install
+                check=True,
             )
             is_available = result.returncode == 0 and "available" in result.stdout
             logger.info(f"lemonade-sdk package available: {is_available}")
@@ -272,7 +284,8 @@ class LemonadeClient:
             required_parts = [int(x) for x in LEMONADE_MINIMUM_VERSION.split(".")]
             is_compatible = version_parts >= required_parts
             logger.info(
-                f"Version parts: {version_parts}, Required: {required_parts}, Compatible: {is_compatible}"
+                f"Version parts: {version_parts}, Required: {required_parts}, "
+                "Compatible: {is_compatible}"
             )
 
             return {
@@ -318,9 +331,6 @@ class LemonadeClient:
             logger.info("Server process is already running")
             return {"success": True, "message": "Server is already running"}
 
-        # Create temp files to capture output for debugging
-        import tempfile
-
         stdout_file = tempfile.NamedTemporaryFile(
             mode="w+", delete=False, suffix=".log"
         )
@@ -340,7 +350,7 @@ class LemonadeClient:
             try:
                 os.unlink(stdout_file.name)
                 os.unlink(stderr_file.name)
-            except:
+            except Exception:
                 pass
             return {
                 "success": False,
@@ -369,9 +379,9 @@ class LemonadeClient:
 
             # Read the error output
             try:
-                with open(stderr_file.name, "r") as f:
+                with open(stderr_file.name, "r", encoding="utf-8") as f:
                     stderr_content = f.read().strip()
-                with open(stdout_file.name, "r") as f:
+                with open(stdout_file.name, "r", encoding="utf-8") as f:
                     stdout_content = f.read().strip()
 
                 logger.error(
@@ -386,7 +396,7 @@ class LemonadeClient:
                 try:
                     os.unlink(stdout_file.name)
                     os.unlink(stderr_file.name)
-                except:
+                except Exception:
                     pass
 
             except Exception as read_error:
@@ -405,13 +415,15 @@ class LemonadeClient:
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minutes timeout
+                check=True,
             )
 
             if result.returncode == 0:
                 logger.info("lemonade-sdk package installed successfully")
                 return {
                     "success": True,
-                    "message": "lemonade-sdk package installed successfully. You can now use 'lemonade-server-dev' command.",
+                    "message": "lemonade-sdk package installed successfully. "
+                    "You can now use 'lemonade-server-dev' command.",
                 }
             else:
                 error_msg = (
@@ -444,13 +456,16 @@ class LemonadeClient:
                 )
                 return {
                     "success": False,
-                    "message": "Could not install lemonade-sdk package. Please visit https://github.com/lemonade-sdk/lemonade for installation instructions.",
+                    "message": "Could not install lemonade-sdk package. "
+                    "Please visit https://github.com/lemonade-sdk/lemonade for "
+                    "installation instructions.",
                     "github_link": "https://github.com/lemonade-sdk/lemonade",
                 }
 
         # PyInstaller environment or fallback - use installer for Windows
         try:
             # Download the installer
+            # pylint: disable=line-too-long
             installer_url = "https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe"
 
             # Create temp directory for installer
@@ -483,7 +498,8 @@ class LemonadeClient:
 
             # Start the installer but don't wait for it to complete
             # This allows the user to see the installation UI
-            process = subprocess.Popen(install_cmd)
+            # pylint: disable=consider-using-with
+            subprocess.Popen(install_cmd)
 
             return {
                 "success": True,
@@ -506,7 +522,8 @@ class LemonadeClient:
                 async with httpx.AsyncClient(timeout=15.0) as client:
                     response = await client.get(f"{self.url}/api/v1/models")
                     logger.info(
-                        f"Server check attempt {attempt + 1} response status: {response.status_code}"
+                        f"Server check attempt {attempt + 1} response status: "
+                        f"{response.status_code}"
                     )
                     if response.status_code == 200:
                         return True

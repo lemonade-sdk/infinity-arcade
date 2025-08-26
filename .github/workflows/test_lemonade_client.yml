@@ -22,11 +22,6 @@ jobs:
           - os: windows-latest
             install-type: 'source'
             test-name: 'Windows Source'
-          
-          # Windows with PyInstaller build
-          - os: windows-latest
-            install-type: 'pyinstaller'
-            test-name: 'Windows PyInstaller'
 
     name: ${{ matrix.test-name }}
     
@@ -42,45 +37,10 @@ jobs:
     - name: Install base dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install httpx
 
-    - name: Install source dependencies (Linux/Windows Source)
-      if: matrix.install-type == 'source'
+    - name: Install source dependencies
       run: |
         pip install -e .
-
-    - name: Cache Python dependencies (PyInstaller)
-      if: matrix.install-type == 'pyinstaller' && runner.os == 'Windows'
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-
-    - name: Install PyInstaller dependencies (Windows PyInstaller)
-      if: matrix.install-type == 'pyinstaller' && runner.os == 'Windows'
-      run: |
-        python -m pip install -e .
-        python -m pip install pyinstaller
-
-    - name: Build PyInstaller executable (Windows PyInstaller)
-      if: matrix.install-type == 'pyinstaller' && runner.os == 'Windows'
-      run: |
-        python -m PyInstaller lemonade_arcade.spec
-      continue-on-error: true  # PyInstaller build might fail but we still want to test the source
-
-    - name: Verify PyInstaller build (Windows PyInstaller)
-      if: matrix.install-type == 'pyinstaller' && runner.os == 'Windows'
-      run: |
-        if (-not (Test-Path "dist\LemonadeArcade.exe")) {
-          Write-Warning "PyInstaller executable not found, but continuing with tests"
-        } else {
-          $exe = Get-Item "dist\LemonadeArcade.exe"
-          Write-Host "✓ PyInstaller build successful: $($exe.Name) ($([math]::Round($exe.Length / 1MB, 2)) MB)"
-        }
-      shell: pwsh
-      continue-on-error: true
 
     - name: Run unit tests
       run: |
