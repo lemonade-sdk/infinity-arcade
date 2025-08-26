@@ -31,6 +31,7 @@ lemonade_handle = lc.LemonadeClient()
 
 
 # Pygame will be imported on-demand to avoid early DLL loading issues
+# pylint: disable=invalid-name
 pygame = None
 
 if os.environ.get("LEMONADE_ARCADE_MODEL"):
@@ -49,6 +50,7 @@ def get_resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
+        # pylint: disable=protected-access,no-member
         base_path = sys._MEIPASS
         # In PyInstaller bundle, resources are under lemonade_arcade/
         if relative_path in ["static", "templates", "builtin_games"]:
@@ -82,18 +84,8 @@ GAMES_DIR.mkdir(parents=True, exist_ok=True)
 METADATA_FILE = GAMES_DIR / "metadata.json"
 if METADATA_FILE.exists():
     try:
-        with open(METADATA_FILE, "r") as f:
-            GAME_METADATA = json.load(f)
-        # Clean up old metadata format - remove descriptions
-        updated = False
-        for game_id, game_data in GAME_METADATA.items():
-            if "description" in game_data:
-                del game_data["description"]
-                updated = True
-        # Save if we made changes
-        if updated:
-            with open(METADATA_FILE, "w") as f:
-                json.dump(GAME_METADATA, f, indent=2)
+        with open(METADATA_FILE, "r", encoding="utf-8") as metadata_file:
+            GAME_METADATA = json.load(metadata_file)
     except Exception:
         GAME_METADATA = {}
 
@@ -125,7 +117,7 @@ for game_id, game_data in BUILTIN_GAMES.items():
 def save_metadata():
     """Save game metadata to disk."""
     try:
-        with open(METADATA_FILE, "w") as f:
+        with open(METADATA_FILE, "w", encoding="utf-8") as f:
             json.dump(GAME_METADATA, f, indent=2)
     except Exception as e:
         print(f"Error saving metadata: {e}")
@@ -136,6 +128,7 @@ async def generate_game_title(prompt: str) -> str:
     logger.debug(f"Generating title for prompt: {prompt[:50]}...")
 
     try:
+        # pylint: disable=line-too-long
         title_prompt = f"""Generate a short game title (2-3 words maximum) for this game concept: "{prompt}"
 
 Requirements:
@@ -516,6 +509,7 @@ async def create_game_endpoint(request: Request):
             logger.debug("Sent 'Connecting to LLM...' status")
 
             # Prepare the system prompt for game generation
+            # pylint: disable=line-too-long
             system_prompt = """You are an expert Python game developer. Generate a complete, working Python game using pygame based on the user's description.
 
 Rules:

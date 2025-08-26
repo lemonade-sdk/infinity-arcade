@@ -45,3 +45,9 @@ jobs:
     - name: Run unit tests
       run: |
         python test/lemonade_client_unit.py
+
+    - name: Run integration tests
+      run: |
+        python test/lemonade_client_integration.py
+      env:
+        PYTHONUNBUFFERED: 1

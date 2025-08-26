@@ -235,16 +235,36 @@ class LemonadeClient:
         """Check if lemonade-sdk package is available in the current environment."""
         logger.info("Checking for lemonade-sdk package...")
         try:
-            # Convert command list to string for shell=True
+            # Handle Windows vs Unix path quoting differently
             cmd = [sys.executable, "-c", "import lemonade_server; print('available')"]
-            cmd_str = " ".join(cmd)
+
+            if sys.platform == "win32":
+                # On Windows, quote paths with spaces using double quotes
+                quoted_args = []
+                for arg in cmd:
+                    if " " in arg:
+                        quoted_args.append(f'"{arg}"')
+                    else:
+                        quoted_args.append(arg)
+                cmd_str = " ".join(quoted_args)
+            else:
+                # On Unix systems, use shlex.quote
+                import shlex
+
+                cmd_str = " ".join(shlex.quote(arg) for arg in cmd)
+
+            logger.debug(f"Executing command: {cmd_str}")
             result = subprocess.run(
                 cmd_str,
                 capture_output=True,
                 text=True,
                 timeout=10,
-                shell=True,  # Use shell=True to get updated environment after pip install
-                check=True,
+                shell=True,  # Keep shell=True for environment handling
+                check=False,  # Don't raise exception on non-zero exit
+            )
+
+            logger.debug(
+                f"Command result: returncode={result.returncode}, stdout='{result.stdout.strip()}', stderr='{result.stderr.strip()}'"
             )
             is_available = result.returncode == 0 and "available" in result.stdout
             logger.info(f"lemonade-sdk package available: {is_available}")
