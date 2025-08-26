@@ -67,38 +67,33 @@ class LemonadeClient:
     def refresh_environment(self):
         """Refresh the current process environment variables from the system."""
         try:
-            if sys.platform == "win32":
-                import winreg
+            # pylint: disable=import-error
+            # This will raise an import exception on linux right now
+            import winreg
 
-                logger.info("Refreshing environment variables...")
+            logger.info("Refreshing environment variables...")
 
-                # Get system PATH
-                with winreg.OpenKey(
-                    winreg.HKEY_LOCAL_MACHINE,
-                    r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
-                ) as key:
-                    system_path = winreg.QueryValueEx(key, "PATH")[0]
+            # Get system PATH
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+            ) as key:
+                system_path = winreg.QueryValueEx(key, "PATH")[0]
 
-                # Get user PATH
-                try:
-                    with winreg.OpenKey(
-                        winreg.HKEY_CURRENT_USER, r"Environment"
-                    ) as key:
-                        user_path = winreg.QueryValueEx(key, "PATH")[0]
-                except FileNotFoundError:
-                    user_path = ""
+            # Get user PATH
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as key:
+                    user_path = winreg.QueryValueEx(key, "PATH")[0]
+            except FileNotFoundError:
+                user_path = ""
 
-                # Combine and update current process environment
-                new_path = system_path
-                if user_path:
-                    new_path = user_path + ";" + system_path
+            # Combine and update current process environment
+            new_path = system_path
+            if user_path:
+                new_path = user_path + ";" + system_path
 
-                os.environ["PATH"] = new_path
-                logger.info(f"Updated PATH: {new_path[:200]}...")  # Log first 200 chars
-            else:
-                logger.info(
-                    "refresh_environment is only applicable on Windows. Skipping."
-                )
+            os.environ["PATH"] = new_path
+            logger.info(f"Updated PATH: {new_path[:200]}...")  # Log first 200 chars
 
         except Exception as e:
             logger.warning(f"Failed to refresh environment: {e}")
