@@ -14,4 +14,5 @@ ignore=builtin_games
 # R0917: too-many-positional-arguments - Too many positional arguments
 # R0912: too-many-branches - Too many branches
 # C0114: missing-module-docstring - Missing module docstring
-disable=W1203,W0718,C0415,R0913,R1705,R0917,R0912,C0114
+# R0915: too-many-statements - Too many statements
+disable=W1203,W0718,C0415,R0913,R1705,R0917,R0912,C0114,R0915

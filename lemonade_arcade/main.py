@@ -74,6 +74,9 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 class ArcadeGames:
+    """
+    Keep track of the state of saved and running games.
+    """
 
     def __init__(self):
 
@@ -157,6 +160,7 @@ class ArcadeGames:
                 cmd = [sys.executable, str(game_file)]
                 logger.debug(f"Development mode - Launching: {' '.join(cmd)}")
 
+            # pylint: disable=consider-using-with
             process = subprocess.Popen(cmd)
             self.running_games[game_id] = process
             logger.debug(f"Game {game_id} launched successfully with PID {process.pid}")
@@ -767,7 +771,9 @@ async def open_game_file(game_id: str):
         return JSONResponse({"success": True, "message": "File opened"})
     except Exception as e:
         logger.error(f"Failed to open file {game_file}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to open file: {str(e)}"
+        ) from e
 
 
 def run_game_file(game_file_path):
@@ -776,9 +782,11 @@ def run_game_file(game_file_path):
         print(f"Lemonade Arcade - Running game: {game_file_path}")
 
         # Import pygame here, right before we need it
+        # pylint: disable=global-statement
         global pygame
         if pygame is None:
             try:
+                # pylint: disable=redefined-outer-name
                 import pygame
 
                 print(f"Pygame {pygame.version.ver} loaded successfully")
@@ -791,6 +799,7 @@ def run_game_file(game_file_path):
             game_code = f.read()
 
         # Execute the game code - pygame should now be available
+        # pylint: disable=exec-used
         exec(game_code, {"__name__": "__main__", "__file__": game_file_path})
 
     except Exception as e:
