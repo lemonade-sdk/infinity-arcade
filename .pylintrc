@@ -1,0 +1,11 @@
+[MASTER]
+
+# Ignore the builtin_games folder
+ignore=builtin_games
+
+[MESSAGES CONTROL]
+
+# Disable the following warnings:
+# W1203: logging-fstring-interpolation - Using f-strings in logging calls
+# W0718: broad-exception-caught - Catching too general exception
+disable=W1203,W0718
