@@ -9,7 +9,7 @@ import httpx
 
 # Add the lemonade_arcade package to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "lemonade_arcade"))
-from lemonade_client import LemonadeClient, LEMONADE_MINIMUM_VERSION
+from lemonade_arcade.lemonade_client import LemonadeClient, LEMONADE_MINIMUM_VERSION
 
 
 class TestLemonadeClient(unittest.TestCase):
