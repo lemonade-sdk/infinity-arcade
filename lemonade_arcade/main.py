@@ -72,55 +72,127 @@ TEMPLATES_DIR = get_resource_path("templates")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-# Global state
-GAMES_DIR = Path.home() / ".lemonade-arcade" / "games"
-RUNNING_GAMES: Dict[str, subprocess.Popen] = {}
-GAME_METADATA: Dict[str, Dict] = {}
 
-# Ensure games directory exists
-GAMES_DIR.mkdir(parents=True, exist_ok=True)
+class ArcadeGames:
 
-# Load existing game metadata
-METADATA_FILE = GAMES_DIR / "metadata.json"
-if METADATA_FILE.exists():
-    try:
-        with open(METADATA_FILE, "r", encoding="utf-8") as metadata_file:
-            GAME_METADATA = json.load(metadata_file)
-    except Exception:
-        GAME_METADATA = {}
+    def __init__(self):
+
+        # Global state
+        self.games_dir = Path.home() / ".lemonade-arcade" / "games"
+        self.running_games: Dict[str, subprocess.Popen] = {}
+        self.game_metadata: Dict[str, Dict] = {}
+
+        # Ensure games directory exists
+        self.games_dir.mkdir(parents=True, exist_ok=True)
+
+        # Load existing game metadata
+        self.metadata_file = self.games_dir / "metadata.json"
+        if self.metadata_file.exists():
+            try:
+                with open(self.metadata_file, "r", encoding="utf-8") as metadata_file:
+                    self.game_metadata = json.load(metadata_file)
+            except Exception:
+                self.game_metadata = {}
+
+        # Built-in games configuration
+        self.BUILTIN_GAMES = {
+            "builtin_snake": {
+                "title": "Dynamic Snake",
+                "created": 0,  # Special marker for built-in games
+                "prompt": "Snake but the food moves around",
+                "builtin": True,
+                "file": "snake_moving_food.py",
+            },
+            "builtin_invaders": {
+                "title": "Rainbow Space Invaders",
+                "created": 0,  # Special marker for built-in games
+                "prompt": "Space invaders with rainbow colors",
+                "builtin": True,
+                "file": "rainbow_space_invaders.py",
+            },
+        }
+
+        # Add built-in games to metadata if not already present
+        for game_id, game_data in self.BUILTIN_GAMES.items():
+            if game_id not in self.game_metadata:
+                self.game_metadata[game_id] = game_data.copy()
+
+    def save_metadata(self):
+        """Save game metadata to disk."""
+        try:
+            with open(self.metadata_file, "w", encoding="utf-8") as f:
+                json.dump(self.game_metadata, f, indent=2)
+        except Exception as e:
+            print(f"Error saving metadata: {e}")
+
+    def launch_game(self, game_id: str):
+        """Launch a game in a separate process."""
+        logger.debug(f"Attempting to launch game {game_id}")
+
+        # Check if it's a built-in game
+        if game_id in self.BUILTIN_GAMES:
+            # For built-in games, use the file from the builtin_games directory
+            builtin_games_dir = get_resource_path("builtin_games")
+            game_file = Path(builtin_games_dir) / self.BUILTIN_GAMES[game_id]["file"]
+            logger.debug(f"Looking for built-in game file at: {game_file}")
+        else:
+            # For user-generated games, use the standard games directory
+            game_file = self.games_dir / f"{game_id}.py"
+            logger.debug(f"Looking for user game file at: {game_file}")
+
+        if not game_file.exists():
+            logger.error(f"Game file not found: {game_file}")
+            raise FileNotFoundError(f"Game file not found: {game_file}")
+
+        # Launch the game
+        try:
+            # In PyInstaller environment, use the same executable with the game file as argument
+            # This ensures the game runs with the same DLL configuration
+            if getattr(sys, "frozen", False):
+                # We're in PyInstaller - use the same executable that has the SDL2 DLLs
+                cmd = [sys.executable, str(game_file)]
+                logger.debug(f"PyInstaller mode - Launching: {' '.join(cmd)}")
+            else:
+                # Development mode - use regular Python
+                cmd = [sys.executable, str(game_file)]
+                logger.debug(f"Development mode - Launching: {' '.join(cmd)}")
+
+            process = subprocess.Popen(cmd)
+            self.running_games[game_id] = process
+            logger.debug(f"Game {game_id} launched successfully with PID {process.pid}")
+            return True
+        except Exception as e:
+            logger.error(f"Error launching game {game_id}: {e}")
+            return False
+
+    def stop_game(self, game_id: str):
+        """Stop a running game."""
+        if game_id in self.running_games:
+            try:
+                process = self.running_games[game_id]
+                process.terminate()
+                # Wait a bit for graceful termination
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+            except Exception as e:
+                print(f"Error stopping game {game_id}: {e}")
+            finally:
+                del self.running_games[game_id]
+
+    def cleanup_finished_games(self):
+        """Clean up finished game processes."""
+        finished = []
+        for game_id, process in self.running_games.items():
+            if process.poll() is not None:  # Process has finished
+                finished.append(game_id)
+
+        for game_id in finished:
+            del self.running_games[game_id]
 
 
-# Built-in games configuration
-BUILTIN_GAMES = {
-    "builtin_snake": {
-        "title": "Dynamic Snake",
-        "created": 0,  # Special marker for built-in games
-        "prompt": "Snake but the food moves around",
-        "builtin": True,
-        "file": "snake_moving_food.py",
-    },
-    "builtin_invaders": {
-        "title": "Rainbow Space Invaders",
-        "created": 0,  # Special marker for built-in games
-        "prompt": "Space invaders with rainbow colors",
-        "builtin": True,
-        "file": "rainbow_space_invaders.py",
-    },
-}
-
-# Add built-in games to metadata if not already present
-for game_id, game_data in BUILTIN_GAMES.items():
-    if game_id not in GAME_METADATA:
-        GAME_METADATA[game_id] = game_data.copy()
-
-
-def save_metadata():
-    """Save game metadata to disk."""
-    try:
-        with open(METADATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(GAME_METADATA, f, indent=2)
-    except Exception as e:
-        print(f"Error saving metadata: {e}")
+arcade_games = ArcadeGames()
 
 
 async def generate_game_title(prompt: str) -> str:
@@ -214,75 +286,6 @@ def generate_game_id():
     return str(uuid.uuid4())[:8]
 
 
-def launch_game(game_id: str):
-    """Launch a game in a separate process."""
-    logger.debug(f"Attempting to launch game {game_id}")
-
-    # Check if it's a built-in game
-    if game_id in BUILTIN_GAMES:
-        # For built-in games, use the file from the builtin_games directory
-        builtin_games_dir = get_resource_path("builtin_games")
-        game_file = Path(builtin_games_dir) / BUILTIN_GAMES[game_id]["file"]
-        logger.debug(f"Looking for built-in game file at: {game_file}")
-    else:
-        # For user-generated games, use the standard games directory
-        game_file = GAMES_DIR / f"{game_id}.py"
-        logger.debug(f"Looking for user game file at: {game_file}")
-
-    if not game_file.exists():
-        logger.error(f"Game file not found: {game_file}")
-        raise FileNotFoundError(f"Game file not found: {game_file}")
-
-    # Launch the game
-    try:
-        # In PyInstaller environment, use the same executable with the game file as argument
-        # This ensures the game runs with the same DLL configuration
-        if getattr(sys, "frozen", False):
-            # We're in PyInstaller - use the same executable that has the SDL2 DLLs
-            cmd = [sys.executable, str(game_file)]
-            logger.debug(f"PyInstaller mode - Launching: {' '.join(cmd)}")
-        else:
-            # Development mode - use regular Python
-            cmd = [sys.executable, str(game_file)]
-            logger.debug(f"Development mode - Launching: {' '.join(cmd)}")
-
-        process = subprocess.Popen(cmd)
-        RUNNING_GAMES[game_id] = process
-        logger.debug(f"Game {game_id} launched successfully with PID {process.pid}")
-        return True
-    except Exception as e:
-        logger.error(f"Error launching game {game_id}: {e}")
-        return False
-
-
-def stop_game(game_id: str):
-    """Stop a running game."""
-    if game_id in RUNNING_GAMES:
-        try:
-            process = RUNNING_GAMES[game_id]
-            process.terminate()
-            # Wait a bit for graceful termination
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-        except Exception as e:
-            print(f"Error stopping game {game_id}: {e}")
-        finally:
-            del RUNNING_GAMES[game_id]
-
-
-def cleanup_finished_games():
-    """Clean up finished game processes."""
-    finished = []
-    for game_id, process in RUNNING_GAMES.items():
-        if process.poll() is not None:  # Process has finished
-            finished.append(game_id)
-
-    for game_id in finished:
-        del RUNNING_GAMES[game_id]
-
-
 @app.get("/")
 async def root(request: Request):
     """Serve the main HTML page."""
@@ -305,8 +308,8 @@ async def server_status():
 @app.get("/api/games")
 async def get_games():
     """Get all saved games."""
-    cleanup_finished_games()
-    return JSONResponse(GAME_METADATA)
+    arcade_games.cleanup_finished_games()
+    return JSONResponse(arcade_games.game_metadata)
 
 
 @app.get("/api/installation-status")
@@ -620,7 +623,7 @@ Generate ONLY the Python code in a single code block. Do not include any explana
             )
 
             # Save the game
-            game_file = GAMES_DIR / f"{game_id}.py"
+            game_file = arcade_games.games_dir / f"{game_id}.py"
             logger.debug(f"Saving game to: {game_file}")
             with open(game_file, "w", encoding="utf-8") as f:
                 f.write(python_code)
@@ -633,19 +636,19 @@ Generate ONLY the Python code in a single code block. Do not include any explana
             game_title = await generate_game_title(prompt)
 
             # Save metadata
-            GAME_METADATA[game_id] = {
+            arcade_games.game_metadata[game_id] = {
                 "title": game_title,
                 "created": time.time(),
                 "prompt": prompt,
             }
-            save_metadata()
+            arcade_games.save_metadata()
             logger.debug(f"Saved metadata for game: {game_title}")
 
             yield f"data: {json.dumps({'type': 'status', 'message': 'Launching game...'})}\n\n"
             logger.debug("Starting game launch")
 
             # Launch the game
-            if launch_game(game_id):
+            if arcade_games.launch_game(game_id):
                 logger.debug(f"Game {game_id} launched successfully")
                 yield f"data: {json.dumps({'type': 'complete', 'game_id': game_id, 'message': 'Game created and launched!'})}\n\n"
             else:
@@ -670,15 +673,15 @@ Generate ONLY the Python code in a single code block. Do not include any explana
 @app.post("/api/launch-game/{game_id}")
 async def launch_game_endpoint(game_id: str):
     """Launch a specific game."""
-    cleanup_finished_games()
+    arcade_games.cleanup_finished_games()
 
-    if RUNNING_GAMES:
+    if arcade_games.running_games:
         raise HTTPException(status_code=400, detail="Another game is already running")
 
-    if game_id not in GAME_METADATA:
+    if game_id not in arcade_games.game_metadata:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    success = launch_game(game_id)
+    success = arcade_games.launch_game(game_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to launch game")
 
@@ -688,33 +691,33 @@ async def launch_game_endpoint(game_id: str):
 @app.get("/api/game-status/{game_id}")
 async def game_status(game_id: str):
     """Check if a game is currently running."""
-    cleanup_finished_games()
-    running = game_id in RUNNING_GAMES
+    arcade_games.cleanup_finished_games()
+    running = game_id in arcade_games.running_games
     return JSONResponse({"running": running})
 
 
 @app.delete("/api/delete-game/{game_id}")
 async def delete_game_endpoint(game_id: str):
     """Delete a game."""
-    if game_id not in GAME_METADATA:
+    if game_id not in arcade_games.game_metadata:
         raise HTTPException(status_code=404, detail="Game not found")
 
     # Prevent deletion of built-in games
-    if game_id in BUILTIN_GAMES:
+    if game_id in arcade_games.BUILTIN_GAMES:
         raise HTTPException(status_code=403, detail="Cannot delete built-in games")
 
     # Stop the game if it's running
-    if game_id in RUNNING_GAMES:
-        stop_game(game_id)
+    if game_id in arcade_games.running_games:
+        arcade_games.stop_game(game_id)
 
     # Delete the file
-    game_file = GAMES_DIR / f"{game_id}.py"
+    game_file = arcade_games.games_dir / f"{game_id}.py"
     if game_file.exists():
         game_file.unlink()
 
     # Remove from metadata
-    del GAME_METADATA[game_id]
-    save_metadata()
+    del arcade_games.game_metadata[game_id]
+    arcade_games.save_metadata()
 
     return JSONResponse({"success": True})
 
@@ -722,13 +725,13 @@ async def delete_game_endpoint(game_id: str):
 @app.get("/api/game-metadata/{game_id}")
 async def get_game_metadata(game_id: str):
     """Get metadata for a specific game."""
-    if game_id not in GAME_METADATA:
+    if game_id not in arcade_games.game_metadata:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    metadata = GAME_METADATA[game_id].copy()
+    metadata = arcade_games.game_metadata[game_id].copy()
 
     # For built-in games, hide sensitive information
-    if game_id in BUILTIN_GAMES:
+    if game_id in arcade_games.BUILTIN_GAMES:
         # Remove prompt and other sensitive data for built-in games
         metadata.pop("prompt", None)
         metadata["builtin"] = True
@@ -739,23 +742,20 @@ async def get_game_metadata(game_id: str):
 @app.post("/api/open-game-file/{game_id}")
 async def open_game_file(game_id: str):
     """Open the Python file for a game in the default editor."""
-    if game_id not in GAME_METADATA:
+    if game_id not in arcade_games.game_metadata:
         raise HTTPException(status_code=404, detail="Game not found")
 
     # Prevent opening built-in game files
-    if game_id in BUILTIN_GAMES:
+    if game_id in arcade_games.BUILTIN_GAMES:
         raise HTTPException(
             status_code=403, detail="Cannot view source code of built-in games"
         )
 
-    game_file = GAMES_DIR / f"{game_id}.py"
+    game_file = arcade_games.games_dir / f"{game_id}.py"
     if not game_file.exists():
         raise HTTPException(status_code=404, detail="Game file not found")
 
     try:
-        import subprocess
-        import sys
-
         # Try to open with the default program (works on Windows, macOS, Linux)
         if sys.platform.startswith("win"):
             subprocess.run(["start", str(game_file)], shell=True, check=True)
@@ -844,8 +844,8 @@ def main():
     except KeyboardInterrupt:
         print("\nShutting down Lemonade Arcade...")
         # Clean up any running games
-        for game_id in list(RUNNING_GAMES.keys()):
-            stop_game(game_id)
+        for game_id in list(arcade_games.running_games.keys()):
+            arcade_games.stop_game(game_id)
 
 
 if __name__ == "__main__":

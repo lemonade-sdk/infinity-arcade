@@ -264,7 +264,8 @@ class LemonadeClient:
             )
 
             logger.debug(
-                f"Command result: returncode={result.returncode}, stdout='{result.stdout.strip()}', stderr='{result.stderr.strip()}'"
+                f"Command result: returncode={result.returncode}, "
+                "stdout='{result.stdout.strip()}', stderr='{result.stderr.strip()}'"
             )
             is_available = result.returncode == 0 and "available" in result.stdout
             logger.info(f"lemonade-sdk package available: {is_available}")
