@@ -169,10 +169,7 @@ class LemonadeClient:
             commands_to_try = []
 
             if sys.platform == "win32":
-                # Windows: Try Python module first (most reliable after pip install)
-                commands_to_try.append([sys.executable, "-m", "lemonade_server"] + args)
-
-                # Then try traditional commands
+                # Windows: Try traditional commands first, then Python module fallback
                 if not self.is_pyinstaller_environment():
                     commands_to_try.append(["lemonade-server-dev"] + args)
 
@@ -192,82 +189,54 @@ class LemonadeClient:
                             [os.path.join(bin_path, "lemonade-server.bat")] + args,
                         ]
                     )
-            else:
-                # Linux/Unix: Try Python module first (most reliable after pip install)
+
+                # Python module fallback (most reliable after pip install)
                 commands_to_try.append([sys.executable, "-m", "lemonade_server"] + args)
+            else:
+                # Linux/Unix: Try lemonade-server-dev first, then Python module fallback
                 commands_to_try.append(["lemonade-server-dev"] + args)
+                commands_to_try.append([sys.executable, "-m", "lemonade_server"] + args)
 
         for i, cmd in enumerate(commands_to_try):
             try:
                 logger.info(f"Trying command {i+1}: {cmd}")
 
+                # Determine if we should use shell=True based on command type
+                use_shell = not (len(cmd) >= 3 and cmd[1] == "-m")
+                final_cmd = " ".join(cmd) if use_shell else cmd
+
                 if use_popen:
                     # For background processes (like server start)
-                    # Handle command execution based on whether it's a Python module call
-                    if len(cmd) >= 3 and cmd[1] == "-m":
-                        # Python module call - don't use shell=True
-                        process = subprocess.Popen(
-                            cmd,
-                            stdout=stdout_file or subprocess.PIPE,
-                            stderr=stderr_file or subprocess.PIPE,
-                            creationflags=(
-                                subprocess.CREATE_NO_WINDOW
-                                if sys.platform == "win32"
-                                else 0
-                            ),
-                            shell=False,
-                            env=os.environ.copy(),
-                        )
-                    else:
-                        # Regular command - use shell=True for PATH resolution
-                        cmd_str = " ".join(cmd)
-                        process = subprocess.Popen(
-                            cmd_str,
-                            stdout=stdout_file or subprocess.PIPE,
-                            stderr=stderr_file or subprocess.PIPE,
-                            creationflags=(
-                                subprocess.CREATE_NO_WINDOW
-                                if sys.platform == "win32"
-                                else 0
-                            ),
-                            shell=True,
-                            env=os.environ.copy(),
-                        )
+                    process = subprocess.Popen(
+                        final_cmd,
+                        stdout=stdout_file or subprocess.PIPE,
+                        stderr=stderr_file or subprocess.PIPE,
+                        creationflags=(
+                            subprocess.CREATE_NO_WINDOW
+                            if sys.platform == "win32"
+                            else 0
+                        ),
+                        shell=use_shell,
+                        env=os.environ.copy(),
+                    )
 
                     # Store the successful command for future use
                     if not self.server_command:
-                        self.server_command = cmd[
-                            : -len(args)
-                        ]  # Remove the args to get base command
+                        self.server_command = cmd[: -len(args)]
                         logger.info(f"Stored server command: {self.server_command}")
 
                     return process
                 else:
                     # For regular commands with output
-                    # Handle command execution based on whether it's a Python module call
-                    if len(cmd) >= 3 and cmd[1] == "-m":
-                        # Python module call - don't use shell=True
-                        result = subprocess.run(
-                            cmd,
-                            capture_output=True,
-                            text=True,
-                            timeout=timeout,
-                            shell=False,
-                            env=os.environ.copy(),
-                            check=False,  # Don't raise exception on non-zero exit
-                        )
-                    else:
-                        # Regular command - use shell=True for PATH resolution
-                        cmd_str = " ".join(cmd)
-                        result = subprocess.run(
-                            cmd_str,
-                            capture_output=True,
-                            text=True,
-                            timeout=timeout,
-                            shell=True,
-                            env=os.environ.copy(),
-                            check=False,  # Don't raise exception on non-zero exit
-                        )
+                    result = subprocess.run(
+                        final_cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=timeout,
+                        shell=use_shell,
+                        env=os.environ.copy(),
+                        check=False,  # Don't raise exception on non-zero exit
+                    )
 
                     logger.info(f"Command {i+1} returned code: {result.returncode}")
                     logger.info(f"Command {i+1} stdout: '{result.stdout}'")
@@ -276,9 +245,7 @@ class LemonadeClient:
                     if result.returncode == 0:
                         # Store the successful command for future use
                         if not self.server_command:
-                            self.server_command = cmd[
-                                : -len(args)
-                            ]  # Remove the args to get base command
+                            self.server_command = cmd[: -len(args)]
                             logger.info(f"Stored server command: {self.server_command}")
 
                         return result

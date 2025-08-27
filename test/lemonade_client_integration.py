@@ -333,5 +333,9 @@ if __name__ == "__main__":
         level=logging.DEBUG
     )  # Enable DEBUG level to see command details
 
+    # Suppress noisy httpcore debug messages
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
     # Run with verbose output
     unittest.main(verbosity=2)

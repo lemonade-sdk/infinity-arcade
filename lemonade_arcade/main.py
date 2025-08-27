@@ -45,6 +45,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("lemonade_arcade.main")
 
+# Suppress noisy httpcore debug messages
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 def get_resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
