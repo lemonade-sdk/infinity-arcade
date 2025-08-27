@@ -40,15 +40,8 @@ if os.environ.get("LEMONADE_ARCADE_MODEL"):
 else:
     REQUIRED_MODEL = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Logger will be configured by CLI or set to INFO if run directly
 logger = logging.getLogger("lemonade_arcade.main")
-
-# Suppress noisy httpcore debug messages
-logging.getLogger("httpcore").setLevel(logging.WARNING)
-logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def get_resource_path(relative_path):
@@ -133,8 +126,8 @@ class ArcadeGames:
         except Exception as e:
             print(f"Error saving metadata: {e}")
 
-    def launch_game(self, game_id: str):
-        """Launch a game in a separate process."""
+    def launch_game(self, game_id: str) -> tuple[bool, str]:
+        """Launch a game in a separate process and capture any immediate errors."""
         logger.debug(f"Attempting to launch game {game_id}")
 
         # Check if it's a built-in game
@@ -150,9 +143,9 @@ class ArcadeGames:
 
         if not game_file.exists():
             logger.error(f"Game file not found: {game_file}")
-            raise FileNotFoundError(f"Game file not found: {game_file}")
+            return False, f"Game file not found: {game_file}"
 
-        # Launch the game
+        # Launch the game with error capture
         try:
             # In PyInstaller environment, use the same executable with the game file as argument
             # This ensures the game runs with the same DLL configuration
@@ -165,26 +158,151 @@ class ArcadeGames:
                 cmd = [sys.executable, str(game_file)]
                 logger.debug(f"Development mode - Launching: {' '.join(cmd)}")
 
+            # Launch with pipes to capture output
             # pylint: disable=consider-using-with
-            process = subprocess.Popen(cmd)
-            self.running_games[game_id] = process
-            logger.debug(f"Game {game_id} launched successfully with PID {process.pid}")
-            return True
+            process = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+
+            start_time = time.time()
+            logger.debug(
+                f"Game {game_id} subprocess started with PID {process.pid} at {time.strftime('%H:%M:%S.%f')[:-3]}"
+            )
+
+            # Give the process a moment to start and check for immediate errors
+            try:
+                stdout, stderr = process.communicate(timeout=2)
+                end_time = time.time()
+                duration = end_time - start_time
+                # Process exited within 2 seconds - this is likely an error for pygame games
+                # Even if return code is 0, pygame games should keep running
+                logger.debug(
+                    f"Game {game_id} subprocess (PID {process.pid}) EXITED after {duration:.3f} seconds at {time.strftime('%H:%M:%S.%f')[:-3]} with return code {process.returncode}"
+                )
+
+                # Filter out pygame warnings from stderr to get actual errors
+                stderr_lines = stderr.strip().split("\n") if stderr else []
+                actual_errors = []
+
+                for line in stderr_lines:
+                    # Skip pygame deprecation warnings and other noise
+                    if any(
+                        skip_phrase in line
+                        for skip_phrase in [
+                            "UserWarning",
+                            "pkg_resources is deprecated",
+                            "from pkg_resources import",
+                            "pygame community",
+                            "https://www.pygame.org",
+                        ]
+                    ):
+                        continue
+                    # Only include lines that look like actual errors (have common error indicators)
+                    if line.strip() and any(
+                        error_indicator in line
+                        for error_indicator in [
+                            "Error",
+                            "Exception",
+                            "Traceback",
+                            'File "',
+                            "line ",
+                            "NameError",
+                            "ImportError",
+                            "SyntaxError",
+                            "AttributeError",
+                            "TypeError",
+                            "ValueError",
+                        ]
+                    ):
+                        actual_errors.append(line)
+
+                filtered_stderr = "\n".join(actual_errors).strip()
+
+                # Debug logging to see what we captured
+                print(f"DEBUG: filtered_stderr length: {len(filtered_stderr)}")
+                print(f"DEBUG: filtered_stderr content: '{filtered_stderr}'")
+                print(f"DEBUG: process.returncode: {process.returncode}")
+
+                if filtered_stderr:
+                    error_msg = filtered_stderr
+                    print(f"DEBUG: Using filtered stderr as error message")
+                elif process.returncode != 0:
+                    # Non-zero exit but no clear error message
+                    error_msg = f"Game exited with code {process.returncode} but no error message was captured"
+                    print(f"DEBUG: Using non-zero exit code message")
+                else:
+                    # Return code 0 but game exited immediately - likely missing game loop
+                    error_msg = (
+                        "Game completed successfully but exited immediately. "
+                        "This usually means the game is missing a proper game loop (while True loop) "
+                        "or has a logical error that causes it to finish execution quickly."
+                    )
+                    print(f"DEBUG: Using missing game loop message")
+
+                if process.returncode != 0:
+                    logger.error(
+                        f"Game {game_id} failed with return code {process.returncode}: {error_msg}"
+                    )
+                    print(
+                        f"\n=== Game {game_id} Failed (Return Code: {process.returncode}) ==="
+                    )
+                else:
+                    logger.error(
+                        f"Game {game_id} exited immediately (return code 0) - likely missing game loop or other issue: {error_msg}"
+                    )
+                    print(
+                        f"\n=== Game {game_id} Exited Immediately (Return Code: 0) ==="
+                    )
+
+                # Print subprocess output to terminal for debugging
+                if stdout:
+                    print("STDOUT:")
+                    print(stdout)
+                if stderr:
+                    print("STDERR:")
+                    print(stderr)
+                if not stdout and not stderr:
+                    print("No output captured")
+                print("=" * 60)
+
+                return False, error_msg
+            except subprocess.TimeoutExpired:
+                # Timeout is good - means the game is still running
+                end_time = time.time()
+                duration = end_time - start_time
+                self.running_games[game_id] = process
+                logger.debug(
+                    f"Game {game_id} subprocess (PID {process.pid}) STILL RUNNING after {duration:.3f} seconds timeout at {time.strftime('%H:%M:%S.%f')[:-3]} - this is GOOD for pygame games"
+                )
+                return True, "Game launched successfully"
+
         except Exception as e:
             logger.error(f"Error launching game {game_id}: {e}")
-            return False
+            return False, str(e)
 
     def stop_game(self, game_id: str):
         """Stop a running game."""
         if game_id in self.running_games:
             try:
                 process = self.running_games[game_id]
+                logger.debug(
+                    f"MANUALLY STOPPING game {game_id} subprocess (PID {process.pid}) at {time.strftime('%H:%M:%S.%f')[:-3]}"
+                )
                 process.terminate()
                 # Wait a bit for graceful termination
                 try:
                     process.wait(timeout=5)
+                    logger.debug(
+                        f"Game {game_id} subprocess (PID {process.pid}) terminated gracefully"
+                    )
                 except subprocess.TimeoutExpired:
+                    logger.debug(
+                        f"Game {game_id} subprocess (PID {process.pid}) did not terminate gracefully, killing..."
+                    )
                     process.kill()
+                    logger.debug(
+                        f"Game {game_id} subprocess (PID {process.pid}) killed"
+                    )
             except Exception as e:
                 print(f"Error stopping game {game_id}: {e}")
             finally:
@@ -195,14 +313,18 @@ class ArcadeGames:
         finished = []
         for game_id, process in self.running_games.items():
             if process.poll() is not None:  # Process has finished
+                return_code = process.returncode
+                logger.debug(
+                    f"Game {game_id} subprocess (PID {process.pid}) FINISHED with return code {return_code} at {time.strftime('%H:%M:%S.%f')[:-3]} - cleaning up"
+                )
                 finished.append(game_id)
 
         for game_id in finished:
             del self.running_games[game_id]
 
     async def create_and_launch_game(
-        self, game_id: str, python_code: str, prompt: str
-    ) -> tuple[bool, str]:
+        self, game_id: str, python_code: str, prompt: str, retry_count: int = 0
+    ) -> tuple[bool, str, Optional[str]]:
         """
         Create a new game by saving the code, generating title, saving metadata, and launching.
 
@@ -210,9 +332,10 @@ class ArcadeGames:
             game_id: Unique identifier for the game
             python_code: The Python code for the game
             prompt: The original prompt used to generate the game
+            retry_count: Number of retry attempts so far
 
         Returns:
-            tuple: (success: bool, message: str)
+            tuple: (success: bool, message: str, error_for_retry: Optional[str])
         """
         try:
             # Save the game file
@@ -222,31 +345,45 @@ class ArcadeGames:
                 f.write(python_code)
             logger.debug("Game file saved successfully")
 
-            # Generate a proper title for the game
-            logger.debug("Generating game title")
-            game_title = await generate_game_title(prompt)
+            # Generate a proper title for the game (only on first attempt)
+            if retry_count == 0:
+                logger.debug("Generating game title")
+                game_title = await generate_game_title(prompt)
 
-            # Save metadata
-            self.game_metadata[game_id] = {
-                "title": game_title,
-                "created": time.time(),
-                "prompt": prompt,
-            }
-            self.save_metadata()
-            logger.debug(f"Saved metadata for game: {game_title}")
+                # Save metadata
+                self.game_metadata[game_id] = {
+                    "title": game_title,
+                    "created": time.time(),
+                    "prompt": prompt,
+                }
+                self.save_metadata()
+                logger.debug(f"Saved metadata for game: {game_title}")
+            else:
+                # Use existing title for retries
+                game_title = self.game_metadata[game_id]["title"]
 
             # Launch the game
             logger.debug("Starting game launch")
-            if self.launch_game(game_id):
+            launch_success, launch_message = self.launch_game(game_id)
+            if launch_success:
                 logger.debug(f"Game {game_id} launched successfully")
-                return True, f"Game '{game_title}' created and launched successfully!"
+                return (
+                    True,
+                    f"Game '{game_title}' created and launched successfully!",
+                    None,
+                )
             else:
-                logger.error(f"Failed to launch game {game_id}")
-                return True, f"Game '{game_title}' created but failed to launch"
+                logger.error(f"Failed to launch game {game_id}: {launch_message}")
+                # Return the error message for potential retry
+                return (
+                    False,
+                    f"Game '{game_title}' created but failed to launch",
+                    launch_message,
+                )
 
         except Exception as e:
             logger.exception(f"Error in game creation: {e}")
-            return False, str(e)
+            return False, str(e), None
 
 
 arcade_games = ArcadeGames()
@@ -336,6 +473,108 @@ def extract_python_code(llm_response: str) -> Optional[str]:
 
     logger.error("No valid Python code block found in response")
     return None
+
+
+async def generate_game_code_with_llm(
+    mode: str, content: str, error_message: str = None
+):
+    """Unified function to generate or fix game code using LLM.
+
+    Args:
+        mode: "create" for new games, "debug" for fixing existing games
+        content: For "create" mode: user's game prompt. For "debug" mode: the buggy code
+        error_message: Only for "debug" mode: the error that occurred
+
+    Returns:
+        Optional[str]: The generated/fixed code, or None if failed
+    """
+
+    if mode == "create":
+        system_prompt = """You are an expert Python game developer. Generate a complete, working Python game using pygame based on the user's description.
+
+Rules:
+1. Use ONLY the pygame library - no external images, sounds, or files
+2. Create everything (graphics, colors, shapes) using pygame's built-in drawing functions
+3. Make the game fully playable and fun
+4. Include proper game mechanics (win/lose conditions, scoring if appropriate)
+5. Use proper pygame event handling and game loop
+6. Add comments explaining key parts of the code
+7. Make sure the game window closes properly when the user clicks the X button
+8. Use reasonable colors and make the game visually appealing with pygame primitives
+
+Generate ONLY the Python code in a single code block. Do not include any explanations outside the code block."""
+
+        user_prompt = f"Create a game: {content}"
+        temperature = 0.7
+
+    elif mode == "debug":
+        system_prompt = """You are a Python debugging expert. The following Python code has an error. Output a single Python code block that fixes the error. Make no other adjustments to the code - only fix the specific error mentioned.
+
+Rules:
+1. Fix ONLY the error mentioned
+2. Keep all other code exactly the same
+3. Return the complete corrected code in a single Python code block
+4. Do not add explanations outside the code block"""
+
+        user_prompt = f"""Error:
+{error_message}
+
+Code:
+```python
+{content}
+```
+
+Fix the error and return the corrected complete code."""
+        temperature = 0.1  # Low temperature for precise fixing
+    else:
+        logger.error(f"Invalid mode: {mode}")
+        yield None
+        return  # Early return without value is allowed
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    try:
+        # Create OpenAI client pointing to Lemonade Server
+        openai_client = AsyncOpenAI(
+            base_url=f"{lemonade_handle.url}/api/v1",
+            api_key="dummy",
+            timeout=600.0,
+        )
+
+        response = await openai_client.chat.completions.create(
+            model=REQUIRED_MODEL,
+            messages=messages,
+            stream=True,  # Always stream for both create and debug modes
+            max_tokens=4000,
+            temperature=temperature,
+        )
+
+        # Handle streaming response for both create and debug modes
+        full_response = ""
+        async for chunk in response:
+            if chunk.choices and len(chunk.choices) > 0:
+                delta = chunk.choices[0].delta
+                if delta.content is not None:
+                    content_chunk = delta.content
+                    full_response += content_chunk
+                    # Yield the content chunk for streaming to LLM Output sidecar
+                    yield content_chunk
+
+        # After all chunks, extract and yield the final code
+        python_code = extract_python_code(full_response)
+        if python_code:
+            logger.debug(f"Successfully extracted code for {mode} mode")
+            yield python_code  # Yield the final extracted code
+        else:
+            logger.error(f"Could not extract code from LLM response in {mode} mode")
+            yield None
+
+    except Exception as e:
+        logger.error(f"Error calling LLM for {mode}: {e}")
+        yield None
 
 
 def generate_game_id():
@@ -568,114 +807,119 @@ async def create_game_endpoint(request: Request):
             yield f"data: {json.dumps({'type': 'status', 'message': 'Connecting to LLM...'})}\n\n"
             logger.debug("Sent 'Connecting to LLM...' status")
 
-            # Prepare the system prompt for game generation
-            # pylint: disable=line-too-long
-            system_prompt = """You are an expert Python game developer. Generate a complete, working Python game using pygame based on the user's description.
+            # Use the centralized function to generate game code
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Generating code...'})}\n\n"
 
-Rules:
-1. Use ONLY the pygame library - no external images, sounds, or files
-2. Create everything (graphics, colors, shapes) using pygame's built-in drawing functions
-3. Make the game fully playable and fun
-4. Include proper game mechanics (win/lose conditions, scoring if appropriate)
-5. Use proper pygame event handling and game loop
-6. Add comments explaining key parts of the code
-7. Make sure the game window closes properly when the user clicks the X button
-8. Use reasonable colors and make the game visually appealing with pygame primitives
+            python_code = None
+            async for result in generate_game_code_with_llm("create", prompt):
+                if result is None:
+                    # Error occurred in the LLM function
+                    logger.error("Error in generate_game_code_with_llm")
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Failed to generate code'})}\n\n"
+                    return
+                elif isinstance(result, str):
+                    # Check if this looks like final extracted code (contains full Python code structure)
+                    if (
+                        "def " in result or "class " in result or "import " in result
+                    ) and len(result) > 100:
+                        # This is likely the final extracted code
+                        python_code = result
+                        logger.debug(f"Received final code, length: {len(python_code)}")
+                        break
+                    else:
+                        # This is a content chunk, stream it to the client
+                        yield f"data: {json.dumps({'type': 'content', 'content': result})}\n\n"
 
-Generate ONLY the Python code in a single code block. Do not include any explanations outside the code block."""
-
-            # Create chat messages
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Create a game: {prompt}"},
-            ]
-
-            logger.debug(
-                f"Prepared messages for LLM, system prompt length: {len(system_prompt)}"
-            )
-
-            # Stream response from Lemonade Server using OpenAI library
-            logger.debug(
-                f"Starting request to {lemonade_handle.url}/api/v1/chat/completions"
-            )
-
-            # Create OpenAI client pointing to Lemonade Server
-            openai_client = AsyncOpenAI(
-                base_url=f"{lemonade_handle.url}/api/v1",
-                api_key="dummy",  # lemonade-server doesn't require a real API key
-                timeout=600.0,
-            )
-
-            try:
-                yield f"data: {json.dumps({'type': 'status', 'message': 'Generating code...'})}\n\n"
-                logger.debug("Sent 'Generating code...' status")
-
-                full_response = ""
-                chunk_count = 0
-
-                # Use OpenAI library for streaming
-                stream = await openai_client.chat.completions.create(
-                    model=REQUIRED_MODEL,
-                    messages=messages,
-                    stream=True,
-                    max_tokens=4000,
-                    temperature=0.7,
-                )
-
-                async for chunk in stream:
-                    chunk_count += 1
-                    logger.debug(f"Processing chunk {chunk_count}: {chunk}")
-
-                    if chunk.choices and len(chunk.choices) > 0:
-                        delta = chunk.choices[0].delta
-                        if delta.content is not None:
-                            content = delta.content
-                            full_response += content
-                            logger.debug(
-                                f"Added content to response, total length: {len(full_response)}"
-                            )
-                            yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
-
-                logger.debug(
-                    f"Finished processing stream, total chunks: {chunk_count}, response length: {len(full_response)}"
-                )
-
-            except Exception as e:
-                logger.error(f"OpenAI streaming request failed: {e}")
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Failed to connect to LLM'})}\n\n"
-                return
-
-            # Extract Python code
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Extracting code...'})}\n\n"
-            logger.debug("Starting code extraction")
-
-            python_code = extract_python_code(full_response)
+            # Verify we got the code
             if not python_code:
                 logger.error(
-                    f"Could not extract Python code from response. Response length: {len(full_response)}"
+                    "Could not get Python code from generate_game_code_with_llm"
                 )
-                logger.debug(f"Full response: {full_response}")
                 yield f"data: {json.dumps({'type': 'error', 'message': 'Could not extract valid Python code from response'})}\n\n"
                 return
+
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Extracting code...'})}\n\n"
+            logger.debug("Code extraction completed")
 
             logger.debug(
                 f"Successfully extracted Python code, length: {len(python_code)}"
             )
 
-            # Create and launch the game using ArcadeGames
+            # Create and launch the game using ArcadeGames with retry logic
             yield f"data: {json.dumps({'type': 'status', 'message': 'Creating title...'})}\n\n"
             yield f"data: {json.dumps({'type': 'status', 'message': 'Launching game...'})}\n\n"
 
-            success, message = await arcade_games.create_and_launch_game(
-                game_id, python_code, prompt
-            )
+            current_code = python_code
+            retry_count = 0
+            max_retries = 1  # Only allow one automatic retry
 
-            if success:
-                logger.debug(f"Game {game_id} created successfully: {message}")
-                yield f"data: {json.dumps({'type': 'complete', 'game_id': game_id, 'message': message})}\n\n"
-            else:
-                logger.error(f"Failed to create game {game_id}: {message}")
-                yield f"data: {json.dumps({'type': 'error', 'message': message})}\n\n"
+            while retry_count <= max_retries:
+                success, message, error_for_retry = (
+                    await arcade_games.create_and_launch_game(
+                        game_id, current_code, prompt, retry_count
+                    )
+                )
+
+                if success:
+                    logger.debug(f"Game {game_id} created successfully: {message}")
+                    yield f"data: {json.dumps({'type': 'complete', 'game_id': game_id, 'message': message})}\n\n"
+                    return
+
+                # Game creation failed
+                if retry_count == 0:
+                    # First automatic retry
+                    logger.info(f"Game {game_id} failed, attempting automatic retry")
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Trying to fix an error...'})}\n\n"
+
+                    if error_for_retry:
+                        # Try to fix the code using LLM
+                        fixed_code = None
+                        async for result in generate_game_code_with_llm(
+                            "debug", current_code, error_for_retry
+                        ):
+                            if result is None:
+                                # Error occurred in the LLM function
+                                logger.error(
+                                    "Error in generate_game_code_with_llm during debug"
+                                )
+                                break
+                            elif isinstance(result, str):
+                                # Check if this looks like final extracted code (contains full Python code structure)
+                                if (
+                                    "def " in result
+                                    or "class " in result
+                                    or "import " in result
+                                ) and len(result) > 100:
+                                    # This is likely the final extracted code
+                                    fixed_code = result
+                                    logger.debug(
+                                        f"Received fixed code, length: {len(fixed_code)}"
+                                    )
+                                    break
+                                else:
+                                    # This is a content chunk, stream it to the client for LLM Output sidecar
+                                    yield f"data: {json.dumps({'type': 'content', 'content': result})}\n\n"
+
+                        if fixed_code:
+                            current_code = fixed_code
+                            retry_count += 1
+                            continue
+                        else:
+                            logger.error("Could not fix code automatically")
+                            break
+                    else:
+                        logger.error("No error message available for fixing")
+                        break
+
+                else:
+                    # Max retries exceeded (after automatic retry)
+                    break
+
+            # If we get here, all retries failed
+            logger.error(
+                f"Failed to create game {game_id} after {retry_count} attempts: {message}"
+            )
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Failed to create game after automatic retry: {message}'})}\n\n"
 
         except Exception as e:
             logger.exception(f"Error in game creation: {e}")
@@ -703,9 +947,11 @@ async def launch_game_endpoint(game_id: str):
     if game_id not in arcade_games.game_metadata:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    success = arcade_games.launch_game(game_id)
+    success, error_message = arcade_games.launch_game(game_id)
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to launch game")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to launch game: {error_message}"
+        )
 
     return JSONResponse({"success": True})
 
@@ -830,6 +1076,16 @@ def run_game_file(game_file_path):
 
 def main():
     """Main entry point for the application."""
+    # Configure logging if not already configured (when run directly, not via CLI)
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+        # Suppress noisy httpcore debug messages
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+
     # Check if we're being called to run a specific game file
     if len(sys.argv) == 2 and sys.argv[1].endswith(".py"):
         # Game mode: run the specified game file

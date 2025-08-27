@@ -1339,7 +1339,7 @@ async function createGame() {
                             document.getElementById('createBtn').disabled = false;
                             document.getElementById('gameSpinner').classList.remove('active');
                             document.getElementById('gamesGrid').style.display = 'grid';
-                        }
+
                     } catch (e) {
                         // Handle potential streaming chunks from SSE format
                         // Check if it's a streaming chunk that needs different parsing
@@ -1529,3 +1529,5 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 15000); // Check every 15 seconds
 });
+
+
