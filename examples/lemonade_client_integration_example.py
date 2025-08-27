@@ -53,7 +53,7 @@ async def main():
         if not result["success"]:
             raise Exception(f"Model loading failed: {result['message']}")
 
-    print(f"✅ lemonade-server ready at {client.url}")
+    print(f"lemonade-server ready at {client.url}")
 
     # Make a chat completion request using OpenAI library
     openai_client = AsyncOpenAI(
