@@ -182,14 +182,16 @@ class LemonadeClient:
 
         Args:
             args: Command arguments to pass to lemonade-server (e.g., ["--version"], ["serve"])
-            timeout: Maximum seconds to wait for command completion (ignored for background processes)
-            use_popen: True for background processes that shouldn't block, False for commands with output
+            timeout: Maximum seconds to wait for command completion
+                (ignored for background processes)
+            use_popen: True for background processes that shouldn't block,
+                False for commands with output
             stdout_file: File handle to redirect standard output (only with use_popen=True)
             stderr_file: File handle to redirect error output (only with use_popen=True)
 
         Returns:
-            subprocess.CompletedProcess for regular commands, subprocess.Popen for background processes,
-            or None if all command attempts failed
+            subprocess.CompletedProcess for regular commands, subprocess.Popen for
+            background processes, or None if all command attempts failed
         """
         logger.info(f"Executing lemonade-server command with args: {args}")
 
