@@ -67,33 +67,71 @@ class LemonadeClient:
     def refresh_environment(self):
         """Refresh the current process environment variables from the system."""
         try:
-            # pylint: disable=import-error
-            # This will raise an import exception on linux right now
-            import winreg
+            if sys.platform == "win32":
+                # pylint: disable=import-error
+                # This will raise an import exception on linux right now
+                import winreg
 
-            logger.info("Refreshing environment variables...")
+                logger.info("Refreshing environment variables...")
 
-            # Get system PATH
-            with winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
-            ) as key:
-                system_path = winreg.QueryValueEx(key, "PATH")[0]
+                # Get system PATH
+                with winreg.OpenKey(
+                    winreg.HKEY_LOCAL_MACHINE,
+                    r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+                ) as key:
+                    system_path = winreg.QueryValueEx(key, "PATH")[0]
 
-            # Get user PATH
-            try:
-                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as key:
-                    user_path = winreg.QueryValueEx(key, "PATH")[0]
-            except FileNotFoundError:
-                user_path = ""
+                # Get user PATH
+                try:
+                    with winreg.OpenKey(
+                        winreg.HKEY_CURRENT_USER, r"Environment"
+                    ) as key:
+                        user_path = winreg.QueryValueEx(key, "PATH")[0]
+                except FileNotFoundError:
+                    user_path = ""
 
-            # Combine and update current process environment
-            new_path = system_path
-            if user_path:
-                new_path = user_path + ";" + system_path
+                # Combine and update current process environment
+                new_path = system_path
+                if user_path:
+                    new_path = user_path + ";" + system_path
 
-            os.environ["PATH"] = new_path
-            logger.info(f"Updated PATH: {new_path[:200]}...")  # Log first 200 chars
+                # Also add common Python Scripts directories that pip might use
+                python_scripts_paths = []
+
+                # Add Python Scripts directory (where pip installs console scripts)
+                python_base = os.path.dirname(sys.executable)
+                scripts_dir = os.path.join(python_base, "Scripts")
+                if os.path.exists(scripts_dir):
+                    python_scripts_paths.append(scripts_dir)
+                    logger.info(f"Found Python Scripts directory: {scripts_dir}")
+
+                # Add user site-packages Scripts directory
+                try:
+                    import site
+
+                    user_site = site.getusersitepackages()
+                    if user_site:
+                        user_scripts = os.path.join(
+                            os.path.dirname(user_site), "Scripts"
+                        )
+                        if os.path.exists(user_scripts):
+                            python_scripts_paths.append(user_scripts)
+                            logger.info(f"Found user Scripts directory: {user_scripts}")
+                except Exception:
+                    pass
+
+                # Add these paths to the PATH if they're not already there
+                for scripts_path in python_scripts_paths:
+                    if scripts_path.lower() not in new_path.lower():
+                        new_path = scripts_path + ";" + new_path
+                        logger.info(f"Added {scripts_path} to PATH")
+
+                os.environ["PATH"] = new_path
+                logger.info(f"Updated PATH: {new_path[:200]}...")  # Log first 200 chars
+            else:
+                logger.info(
+                    "Non-Windows platform, skipping registry-based PATH refresh"
+                )
 
         except Exception as e:
             logger.warning(f"Failed to refresh environment: {e}")
@@ -131,7 +169,10 @@ class LemonadeClient:
             commands_to_try = []
 
             if sys.platform == "win32":
-                # Windows: Try multiple options including PyInstaller and pip installs
+                # Windows: Try Python module first (most reliable after pip install)
+                commands_to_try.append([sys.executable, "-m", "lemonade_server"] + args)
+
+                # Then try traditional commands
                 if not self.is_pyinstaller_environment():
                     commands_to_try.append(["lemonade-server-dev"] + args)
 
@@ -152,7 +193,8 @@ class LemonadeClient:
                         ]
                     )
             else:
-                # Linux/Unix: Only lemonade-server-dev works (from pip install lemonade-sdk)
+                # Linux/Unix: Try Python module first (most reliable after pip install)
+                commands_to_try.append([sys.executable, "-m", "lemonade_server"] + args)
                 commands_to_try.append(["lemonade-server-dev"] + args)
 
         for i, cmd in enumerate(commands_to_try):
@@ -161,20 +203,36 @@ class LemonadeClient:
 
                 if use_popen:
                     # For background processes (like server start)
-                    # Convert command list to string for shell=True
-                    cmd_str = " ".join(cmd)
-                    process = subprocess.Popen(
-                        cmd_str,
-                        stdout=stdout_file or subprocess.PIPE,
-                        stderr=stderr_file or subprocess.PIPE,
-                        creationflags=(
-                            subprocess.CREATE_NO_WINDOW
-                            if sys.platform == "win32"
-                            else 0
-                        ),
-                        shell=True,  # Use shell=True to help with PATH resolution
-                        env=os.environ.copy(),  # Pass current environment
-                    )
+                    # Handle command execution based on whether it's a Python module call
+                    if len(cmd) >= 3 and cmd[1] == "-m":
+                        # Python module call - don't use shell=True
+                        process = subprocess.Popen(
+                            cmd,
+                            stdout=stdout_file or subprocess.PIPE,
+                            stderr=stderr_file or subprocess.PIPE,
+                            creationflags=(
+                                subprocess.CREATE_NO_WINDOW
+                                if sys.platform == "win32"
+                                else 0
+                            ),
+                            shell=False,
+                            env=os.environ.copy(),
+                        )
+                    else:
+                        # Regular command - use shell=True for PATH resolution
+                        cmd_str = " ".join(cmd)
+                        process = subprocess.Popen(
+                            cmd_str,
+                            stdout=stdout_file or subprocess.PIPE,
+                            stderr=stderr_file or subprocess.PIPE,
+                            creationflags=(
+                                subprocess.CREATE_NO_WINDOW
+                                if sys.platform == "win32"
+                                else 0
+                            ),
+                            shell=True,
+                            env=os.environ.copy(),
+                        )
 
                     # Store the successful command for future use
                     if not self.server_command:
@@ -186,17 +244,31 @@ class LemonadeClient:
                     return process
                 else:
                     # For regular commands with output
-                    # Convert command list to string for shell=True
-                    cmd_str = " ".join(cmd)
-                    result = subprocess.run(
-                        cmd_str,
-                        capture_output=True,
-                        text=True,
-                        timeout=timeout,
-                        shell=True,  # Use shell=True to help with PATH resolution
-                        env=os.environ.copy(),  # Pass current environment
-                        check=True,
-                    )
+                    # Handle command execution based on whether it's a Python module call
+                    if len(cmd) >= 3 and cmd[1] == "-m":
+                        # Python module call - don't use shell=True
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=timeout,
+                            shell=False,
+                            env=os.environ.copy(),
+                            check=False,  # Don't raise exception on non-zero exit
+                        )
+                    else:
+                        # Regular command - use shell=True for PATH resolution
+                        cmd_str = " ".join(cmd)
+                        result = subprocess.run(
+                            cmd_str,
+                            capture_output=True,
+                            text=True,
+                            timeout=timeout,
+                            shell=True,
+                            env=os.environ.copy(),
+                            check=False,  # Don't raise exception on non-zero exit
+                        )
+
                     logger.info(f"Command {i+1} returned code: {result.returncode}")
                     logger.info(f"Command {i+1} stdout: '{result.stdout}'")
                     logger.info(f"Command {i+1} stderr: '{result.stderr}'")
@@ -267,7 +339,7 @@ class LemonadeClient:
 
             logger.debug(
                 f"Command result: returncode={result.returncode}, "
-                "stdout='{result.stdout.strip()}', stderr='{result.stderr.strip()}'"
+                f"stdout='{result.stdout.strip()}', stderr='{result.stderr.strip()}'"
             )
             is_available = result.returncode == 0 and "available" in result.stdout
             logger.info(f"lemonade-sdk package available: {is_available}")
