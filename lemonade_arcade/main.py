@@ -1215,7 +1215,7 @@ Generate ONLY the Python code in a single code block. Do not include any explana
             logger.debug(
                 f"Starting request to {LEMONADE_SERVER_URL}/api/v1/chat/completions"
             )
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=600.0) as client:
                 async with client.stream(
                     "POST",
                     f"{LEMONADE_SERVER_URL}/api/v1/chat/completions",
