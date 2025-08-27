@@ -96,29 +96,7 @@ class LemonadeClient:
                     new_path = user_path + ";" + system_path
 
                 # Also add common Python Scripts directories that pip might use
-                python_scripts_paths = []
-
-                # Add Python Scripts directory (where pip installs console scripts)
-                python_base = os.path.dirname(sys.executable)
-                scripts_dir = os.path.join(python_base, "Scripts")
-                if os.path.exists(scripts_dir):
-                    python_scripts_paths.append(scripts_dir)
-                    logger.info(f"Found Python Scripts directory: {scripts_dir}")
-
-                # Add user site-packages Scripts directory
-                try:
-                    import site
-
-                    user_site = site.getusersitepackages()
-                    if user_site:
-                        user_scripts = os.path.join(
-                            os.path.dirname(user_site), "Scripts"
-                        )
-                        if os.path.exists(user_scripts):
-                            python_scripts_paths.append(user_scripts)
-                            logger.info(f"Found user Scripts directory: {user_scripts}")
-                except Exception:
-                    pass
+                python_scripts_paths = self._discover_python_scripts_paths()
 
                 # Add these paths to the PATH if they're not already there
                 for scripts_path in python_scripts_paths:
@@ -135,6 +113,32 @@ class LemonadeClient:
 
         except Exception as e:
             logger.warning(f"Failed to refresh environment: {e}")
+
+    def _discover_python_scripts_paths(self):
+        """Discover Python Scripts directories where pip installs console scripts."""
+        python_scripts_paths = []
+
+        # Add Python Scripts directory (where pip installs console scripts)
+        python_base = os.path.dirname(sys.executable)
+        scripts_dir = os.path.join(python_base, "Scripts")
+        if os.path.exists(scripts_dir):
+            python_scripts_paths.append(scripts_dir)
+            logger.info(f"Found Python Scripts directory: {scripts_dir}")
+
+        # Add user site-packages Scripts directory
+        try:
+            import site
+
+            user_site = site.getusersitepackages()
+            if user_site:
+                user_scripts = os.path.join(os.path.dirname(user_site), "Scripts")
+                if os.path.exists(user_scripts):
+                    python_scripts_paths.append(user_scripts)
+                    logger.info(f"Found user Scripts directory: {user_scripts}")
+        except Exception:
+            pass
+
+        return python_scripts_paths
 
     async def execute_lemonade_server_command(
         self,

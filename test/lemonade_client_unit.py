@@ -142,7 +142,11 @@ class TestLemonadeClient(unittest.TestCase):
             ("C:\\Users\\User\\bin", 1),  # User PATH
         ]
 
-        self.client.refresh_environment()
+        # Mock Python Scripts discovery to return empty list
+        with patch.object(
+            self.client, "_discover_python_scripts_paths", return_value=[]
+        ):
+            self.client.refresh_environment()
 
         # Check that PATH was updated
         expected_path = "C:\\Users\\User\\bin;C:\\Windows\\System32;C:\\Program Files"
@@ -161,7 +165,11 @@ class TestLemonadeClient(unittest.TestCase):
         ]
 
         with patch("os.environ") as mock_environ:
-            self.client.refresh_environment()
+            # Mock Python Scripts discovery to return empty list
+            with patch.object(
+                self.client, "_discover_python_scripts_paths", return_value=[]
+            ):
+                self.client.refresh_environment()
             # Should still set PATH to system PATH only
             mock_environ.__setitem__.assert_called_with("PATH", "C:\\Windows\\System32")
 
