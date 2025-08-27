@@ -503,7 +503,6 @@ Rules:
 Generate ONLY the Python code in a single code block. Do not include any explanations outside the code block."""
 
         user_prompt = f"Create a game: {content}"
-        temperature = 0.7
 
     elif mode == "debug":
         system_prompt = """You are a Python debugging expert. The following Python code has an error. Output a single Python code block that fixes the error. Make no other adjustments to the code - only fix the specific error mentioned.
@@ -523,7 +522,6 @@ Code:
 ```
 
 Fix the error and return the corrected complete code."""
-        temperature = 0.1  # Low temperature for precise fixing
     else:
         logger.error(f"Invalid mode: {mode}")
         yield None
@@ -536,7 +534,6 @@ Fix the error and return the corrected complete code."""
 
     # Debug logging for OpenAI messages structure
     logger.debug(f"=== OpenAI Messages Debug for {mode} mode ===")
-    logger.debug(f"Temperature: {temperature}")
     logger.debug(f"Number of messages: {len(messages)}")
     for i, message in enumerate(messages):
         role = message["role"]
@@ -566,7 +563,6 @@ Fix the error and return the corrected complete code."""
             messages=messages,
             stream=True,  # Always stream for both create and debug modes
             max_tokens=4000,
-            temperature=temperature,
         )
 
         # Handle streaming response for both create and debug modes
