@@ -1,7 +1,3 @@
-"""
-Defines the LemonadeClient class.
-"""
-
 import logging
 import os
 import subprocess
@@ -274,9 +270,9 @@ class LemonadeClient:
                         check=False,  # Don't raise exception on non-zero exit
                     )
 
-                    logger.info(f"Command {i+1} returned code: {result.returncode}")
-                    logger.info(f"Command {i+1} stdout: '{result.stdout}'")
-                    logger.info(f"Command {i+1} stderr: '{result.stderr}'")
+                    logger.debug(f"Command {i+1} returned code: {result.returncode}")
+                    logger.debug(f"Command {i+1} stdout: '{result.stdout}'")
+                    logger.debug(f"Command {i+1} stderr: '{result.stderr}'")
 
                     if result.returncode == 0:
                         # Store the successful command for future use
@@ -286,19 +282,19 @@ class LemonadeClient:
 
                         return result
                     else:
-                        logger.warning(
+                        logger.debug(
                             f"Command {i+1} failed with return code {result.returncode}"
                         )
                         if result.stderr:
-                            logger.warning(f"stderr: {result.stderr}")
+                            logger.debug(f"stderr: {result.stderr}")
                         # Try next command
                         continue
 
             except FileNotFoundError as e:
-                logger.info(f"Command {i+1} not found: {e}")
+                logger.debug(f"Command {i+1} not found: {e}")
                 continue
             except subprocess.TimeoutExpired as e:
-                logger.warning(f"Command {i+1} timed out: {e}")
+                logger.debug(f"Command {i+1} timed out: {e}")
                 continue
             except Exception as e:
                 logger.error(f"Unexpected error with command {i+1}: {e}")
