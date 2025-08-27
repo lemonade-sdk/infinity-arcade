@@ -165,9 +165,7 @@ class ArcadeGames:
             )
 
             start_time = time.time()
-            logger.debug(
-                f"Game {game_id} subprocess started with PID {process.pid} at {time.strftime('%H:%M:%S.%f')[:-3]}"
-            )
+            logger.debug(f"Game {game_id} subprocess started with PID {process.pid}")
 
             # Give the process a moment to start and check for immediate errors
             try:
@@ -177,7 +175,7 @@ class ArcadeGames:
                 # Process exited within 2 seconds - this is likely an error for pygame games
                 # Even if return code is 0, pygame games should keep running
                 logger.debug(
-                    f"Game {game_id} subprocess (PID {process.pid}) EXITED after {duration:.3f} seconds at {time.strftime('%H:%M:%S.%f')[:-3]} with return code {process.returncode}"
+                    f"Game {game_id} subprocess (PID {process.pid}) EXITED after {duration:.3f} seconds with return code {process.returncode}"
                 )
 
                 # Filter out pygame warnings from stderr to get actual errors
@@ -272,7 +270,7 @@ class ArcadeGames:
                 duration = end_time - start_time
                 self.running_games[game_id] = process
                 logger.debug(
-                    f"Game {game_id} subprocess (PID {process.pid}) STILL RUNNING after {duration:.3f} seconds timeout at {time.strftime('%H:%M:%S.%f')[:-3]} - this is GOOD for pygame games"
+                    f"Game {game_id} subprocess (PID {process.pid}) STILL RUNNING after {duration:.3f} seconds timeout - this is GOOD for pygame games"
                 )
                 return True, "Game launched successfully"
 
@@ -286,7 +284,7 @@ class ArcadeGames:
             try:
                 process = self.running_games[game_id]
                 logger.debug(
-                    f"MANUALLY STOPPING game {game_id} subprocess (PID {process.pid}) at {time.strftime('%H:%M:%S.%f')[:-3]}"
+                    f"MANUALLY STOPPING game {game_id} subprocess (PID {process.pid})"
                 )
                 process.terminate()
                 # Wait a bit for graceful termination
@@ -315,7 +313,7 @@ class ArcadeGames:
             if process.poll() is not None:  # Process has finished
                 return_code = process.returncode
                 logger.debug(
-                    f"Game {game_id} subprocess (PID {process.pid}) FINISHED with return code {return_code} at {time.strftime('%H:%M:%S.%f')[:-3]} - cleaning up"
+                    f"Game {game_id} subprocess (PID {process.pid}) FINISHED with return code {return_code} - cleaning up"
                 )
                 finished.append(game_id)
 
@@ -535,6 +533,25 @@ Fix the error and return the corrected complete code."""
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
+
+    # Debug logging for OpenAI messages structure
+    logger.debug(f"=== OpenAI Messages Debug for {mode} mode ===")
+    logger.debug(f"Temperature: {temperature}")
+    logger.debug(f"Number of messages: {len(messages)}")
+    for i, message in enumerate(messages):
+        role = message["role"]
+        content = message["content"]
+        content_length = len(content)
+        logger.debug(
+            f"Message {i+1} - Role: {role}, Content length: {content_length} chars"
+        )
+        # Log first 200 chars and last 100 chars to see structure without overwhelming logs
+        if content_length <= 300:
+            logger.debug(f"Message {i+1} - Full content: {repr(content)}")
+        else:
+            logger.debug(f"Message {i+1} - Content start: {repr(content[:200])}")
+            logger.debug(f"Message {i+1} - Content end: {repr(content[-100:])}")
+    logger.debug("=== End OpenAI Messages Debug ===")
 
     try:
         # Create OpenAI client pointing to Lemonade Server
