@@ -32,11 +32,28 @@ class LemonadeClient:
         self.url = "http://localhost:8000"
 
     def is_pyinstaller_environment(self):
-        """Check if we're running in a PyInstaller bundle."""
+        """
+        Check if the application is running in a PyInstaller bundle environment.
+
+        Use this when your app needs to determine installation method preferences
+        or adjust behavior based on deployment type. PyInstaller environments
+        typically prefer installer-based server installation over pip.
+
+        Returns:
+            bool: True if running in PyInstaller bundle, False otherwise
+        """
         return getattr(sys, "frozen", False)
 
     def find_lemonade_server_paths(self):
-        """Find actual lemonade-server installation paths by checking the environment."""
+        """
+        Find lemonade-server installation paths by scanning the system PATH.
+
+        Use this to discover where lemonade-server binaries are installed on the system.
+        Helpful for apps that need to verify installation locations or debug path issues.
+
+        Returns:
+            List[str]: List of directory paths containing lemonade-server installations
+        """
         paths = []
 
         # Check current PATH for lemonade_server/bin directories
@@ -53,7 +70,13 @@ class LemonadeClient:
         return paths
 
     def reset_server_state(self):
-        """Reset server state when installation changes."""
+        """
+        Reset cached server state after installation changes or configuration updates.
+
+        Call this when you've installed/updated lemonade-server or changed system configuration
+        to ensure the client rediscovers server commands and processes. Essential after
+        installation operations to avoid using stale cached paths.
+        """
 
         logger.info("Resetting server state")
         self.server_command = None
@@ -65,7 +88,13 @@ class LemonadeClient:
         self.server_process = None
 
     def refresh_environment(self):
-        """Refresh the current process environment variables from the system."""
+        """
+        Refresh environment variables from the system registry (Windows only).
+
+        Use this after installing lemonade-server to pick up newly added PATH entries
+        without requiring an application restart. Essential for apps that install
+        lemonade-server programmatically and need immediate access to the commands.
+        """
         try:
             if sys.platform == "win32":
                 # pylint: disable=import-error
@@ -149,19 +178,22 @@ class LemonadeClient:
         stderr_file=None,
     ):
         """
-        Execute a lemonade-server command with the appropriate binary/method.
+        Execute lemonade-server commands using the best available method for the system.
+
+        Use this as the primary interface for running any lemonade-server command. The method
+        automatically tries different installation methods (pip, installer, dev) and caches
+        the successful command for future use. Essential for cross-platform compatibility.
 
         Args:
-            args: Command arguments (e.g., ["--version"], ["status"], ["serve"])
-            timeout: Timeout in seconds for subprocess.run (ignored for Popen)
-            use_popen: If True, use Popen for background processes, otherwise use run
-            stdout_file: File object for stdout (only used with use_popen=True)
-            stderr_file: File object for stderr (only used with use_popen=True)
+            args: Command arguments to pass to lemonade-server (e.g., ["--version"], ["serve"])
+            timeout: Maximum seconds to wait for command completion (ignored for background processes)
+            use_popen: True for background processes that shouldn't block, False for commands with output
+            stdout_file: File handle to redirect standard output (only with use_popen=True)
+            stderr_file: File handle to redirect error output (only with use_popen=True)
 
         Returns:
-            For subprocess.run: subprocess.CompletedProcess
-            For subprocess.Popen: subprocess.Popen instance
-            Returns None if all commands failed
+            subprocess.CompletedProcess for regular commands, subprocess.Popen for background processes,
+            or None if all command attempts failed
         """
         logger.info(f"Executing lemonade-server command with args: {args}")
 
@@ -277,7 +309,16 @@ class LemonadeClient:
         return None
 
     async def check_lemonade_sdk_available(self):
-        """Check if lemonade-sdk package is available in the current environment."""
+        """
+        Check if the lemonade-sdk Python package is installed and importable.
+
+        Use this to determine if pip-based installation is available before attempting
+        SDK-based operations. Helpful for showing installation options to users or
+        choosing between different installation methods.
+
+        Returns:
+            bool: True if lemonade-sdk package can be imported, False otherwise
+        """
         logger.info("Checking for lemonade-sdk package...")
         try:
             # Handle Windows vs Unix path quoting differently
@@ -320,7 +361,17 @@ class LemonadeClient:
             return False
 
     async def check_lemonade_server_version(self):
-        """Check if lemonade-server is installed and get its version."""
+        """
+        Check lemonade-server installation status and version compatibility.
+
+        Use this to verify that lemonade-server is installed and meets minimum version
+        requirements before attempting to use server features. Essential for displaying
+        installation status and guiding users through setup.
+
+        Returns:
+            dict: Contains 'installed' (bool), 'version' (str), 'compatible' (bool),
+                  and 'required_version' (str) keys
+        """
         logger.info("Checking lemonade-server version...")
 
         result = await self.execute_lemonade_server_command(["--version"])
@@ -370,7 +421,16 @@ class LemonadeClient:
             }
 
     async def check_lemonade_server_running(self):
-        """Check if lemonade-server is currently running."""
+        """
+        Check if the lemonade-server process is currently running.
+
+        Use this to determine server status before attempting operations that require
+        a running server. Helps decide whether to start the server or proceed with
+        API calls.
+
+        Returns:
+            bool: True if server process is running, False otherwise
+        """
         logger.info("Checking if lemonade-server is running...")
 
         result = await self.execute_lemonade_server_command(["status"])
@@ -389,7 +449,17 @@ class LemonadeClient:
             return False
 
     async def start_lemonade_server(self):
-        """Start lemonade-server in the background."""
+        """
+        Start the lemonade-server process in the background.
+
+        Use this to launch the server when it's not running and your app needs server
+        functionality. The server runs in a separate process and the method tracks the
+        process to avoid multiple instances.
+
+        Returns:
+            dict: Contains 'success' (bool) and 'message' (str) keys indicating
+                  whether the server started successfully
+        """
         logger.info("Attempting to start lemonade-server...")
 
         # Check if server is already running
@@ -471,7 +541,17 @@ class LemonadeClient:
             return {"success": False, "message": "Server process died immediately"}
 
     async def install_lemonade_sdk_package(self):
-        """Install lemonade-sdk package using pip."""
+        """
+        Install the lemonade-sdk Python package using pip.
+
+        Use this to install lemonade-server via pip when in development environments
+        or when the SDK approach is preferred. Provides access to lemonade-server-dev
+        command after successful installation.
+
+        Returns:
+            dict: Contains 'success' (bool) and 'message' (str) keys indicating
+                  installation result and any error details
+        """
         try:
             logger.info("Installing lemonade-sdk package using pip...")
 
@@ -503,7 +583,17 @@ class LemonadeClient:
             return {"success": False, "message": f"Failed to install: {e}"}
 
     async def download_and_install_lemonade_server(self):
-        """Download and install lemonade-server using the appropriate method."""
+        """
+        Download and install lemonade-server using the best method for the environment.
+
+        Use this as the primary installation method. Automatically chooses between pip
+        installation (development environments) or executable installer (PyInstaller bundles).
+        Handles the complete installation process including download and setup.
+
+        Returns:
+            dict: Contains 'success' (bool), 'message' (str), and optionally 'interactive' (bool)
+                  or 'github_link' (str) keys with installation results and next steps
+        """
 
         # Reset server state since we're installing/updating
         self.reset_server_state()
@@ -578,7 +668,16 @@ class LemonadeClient:
             return {"success": False, "message": f"Failed to install: {e}"}
 
     async def check_lemonade_server_api(self):
-        """Check if Lemonade Server is running."""
+        """
+        Check if the lemonade-server API is responding to requests.
+
+        Use this to verify that the server is not only running but also accepting
+        API connections. More reliable than process checks for determining if the
+        server is ready to handle requests.
+
+        Returns:
+            bool: True if server API is responding, False otherwise
+        """
         logger.info(f"Checking Lemonade Server at {self.url}")
 
         # Try multiple times with increasing delays to give server time to start
@@ -626,7 +725,16 @@ class LemonadeClient:
         return False
 
     async def get_available_models(self):
-        """Get list of available models from Lemonade Server."""
+        """
+        Retrieve the list of models available on the lemonade-server.
+
+        Use this to discover which models are installed and available for use.
+        Helpful for displaying model options to users or verifying that required
+        models are available before attempting to use them.
+
+        Returns:
+            List[str]: List of model names/IDs available on the server, empty list if none found
+        """
         logger.info("Getting available models from Lemonade Server")
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -645,7 +753,18 @@ class LemonadeClient:
         return []
 
     async def check_model_installed(self, model):
-        """Check if a model is installed."""
+        """
+        Check if a specific model is installed on the server.
+
+        Use this to verify model availability before attempting to load or use a model.
+        Essential for apps that depend on specific models to function properly.
+
+        Args:
+            model: The model name/ID to check for (e.g., "Qwen3-Coder-30B-A3B-Instruct-GGUF")
+
+        Returns:
+            dict: Contains 'installed' (bool) and 'model_name' (str) keys
+        """
         logger.info(f"Checking for required model: {model}")
 
         try:
@@ -658,7 +777,19 @@ class LemonadeClient:
             return {"installed": False, "model_name": model}
 
     async def check_model_loaded(self, model):
-        """Check if a model is currently loaded."""
+        """
+        Check if a specific model is currently loaded and ready for inference.
+
+        Use this to verify that a model is loaded before making inference requests.
+        Models must be loaded before they can be used for chat completions or other
+        inference operations.
+
+        Args:
+            model: The model name/ID to check (e.g., "Qwen3-Coder-30B-A3B-Instruct-GGUF")
+
+        Returns:
+            dict: Contains 'loaded' (bool), 'model_name' (str), and 'current_model' (str) keys
+        """
         logger.info(f"Checking if model is loaded: {model}")
 
         try:
@@ -696,7 +827,20 @@ class LemonadeClient:
             }
 
     async def install_model(self, model):
-        """Install a model using the pull endpoint."""
+        """
+        Download and install a model on the lemonade-server.
+
+        Use this to install models that your app requires but aren't currently available
+        on the server. The installation process may take several minutes for large models
+        and requires an active internet connection.
+
+        Args:
+            model: The model name/ID to install (e.g., "Qwen3-Coder-30B-A3B-Instruct-GGUF")
+
+        Returns:
+            dict: Contains 'success' (bool) and 'message' (str) keys indicating
+                  installation result and any error details
+        """
         logger.info(f"Installing model: {model}")
 
         try:
@@ -729,7 +873,20 @@ class LemonadeClient:
             return {"success": False, "message": error_msg}
 
     async def load_model(self, model):
-        """Load a model using the load endpoint."""
+        """
+        Load a model into memory for inference operations.
+
+        Use this to prepare an installed model for use. Models must be loaded before
+        they can handle chat completions or other inference requests. Only one model
+        can be loaded at a time.
+
+        Args:
+            model: The model name/ID to load (e.g., "Qwen3-Coder-30B-A3B-Instruct-GGUF")
+
+        Returns:
+            dict: Contains 'success' (bool) and 'message' (str) keys indicating
+                  whether the model loaded successfully
+        """
         logger.info(f"Loading model: {model}")
 
         try:
