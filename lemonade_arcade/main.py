@@ -199,6 +199,54 @@ class ArcadeGames:
         for game_id in finished:
             del self.running_games[game_id]
 
+    async def create_and_launch_game(
+        self, game_id: str, python_code: str, prompt: str
+    ) -> tuple[bool, str]:
+        """
+        Create a new game by saving the code, generating title, saving metadata, and launching.
+
+        Args:
+            game_id: Unique identifier for the game
+            python_code: The Python code for the game
+            prompt: The original prompt used to generate the game
+
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        try:
+            # Save the game file
+            game_file = self.games_dir / f"{game_id}.py"
+            logger.debug(f"Saving game to: {game_file}")
+            with open(game_file, "w", encoding="utf-8") as f:
+                f.write(python_code)
+            logger.debug("Game file saved successfully")
+
+            # Generate a proper title for the game
+            logger.debug("Generating game title")
+            game_title = await generate_game_title(prompt)
+
+            # Save metadata
+            self.game_metadata[game_id] = {
+                "title": game_title,
+                "created": time.time(),
+                "prompt": prompt,
+            }
+            self.save_metadata()
+            logger.debug(f"Saved metadata for game: {game_title}")
+
+            # Launch the game
+            logger.debug("Starting game launch")
+            if self.launch_game(game_id):
+                logger.debug(f"Game {game_id} launched successfully")
+                return True, f"Game '{game_title}' created and launched successfully!"
+            else:
+                logger.error(f"Failed to launch game {game_id}")
+                return True, f"Game '{game_title}' created but failed to launch"
+
+        except Exception as e:
+            logger.exception(f"Error in game creation: {e}")
+            return False, str(e)
+
 
 arcade_games = ArcadeGames()
 
@@ -630,38 +678,20 @@ Generate ONLY the Python code in a single code block. Do not include any explana
                 f"Successfully extracted Python code, length: {len(python_code)}"
             )
 
-            # Save the game
-            game_file = arcade_games.games_dir / f"{game_id}.py"
-            logger.debug(f"Saving game to: {game_file}")
-            with open(game_file, "w", encoding="utf-8") as f:
-                f.write(python_code)
-            logger.debug("Game file saved successfully")
-
-            # Generate a proper title for the game
+            # Create and launch the game using ArcadeGames
             yield f"data: {json.dumps({'type': 'status', 'message': 'Creating title...'})}\n\n"
-            logger.debug("Generating game title")
-
-            game_title = await generate_game_title(prompt)
-
-            # Save metadata
-            arcade_games.game_metadata[game_id] = {
-                "title": game_title,
-                "created": time.time(),
-                "prompt": prompt,
-            }
-            arcade_games.save_metadata()
-            logger.debug(f"Saved metadata for game: {game_title}")
-
             yield f"data: {json.dumps({'type': 'status', 'message': 'Launching game...'})}\n\n"
-            logger.debug("Starting game launch")
 
-            # Launch the game
-            if arcade_games.launch_game(game_id):
-                logger.debug(f"Game {game_id} launched successfully")
-                yield f"data: {json.dumps({'type': 'complete', 'game_id': game_id, 'message': 'Game created and launched!'})}\n\n"
+            success, message = await arcade_games.create_and_launch_game(
+                game_id, python_code, prompt
+            )
+
+            if success:
+                logger.debug(f"Game {game_id} created successfully: {message}")
+                yield f"data: {json.dumps({'type': 'complete', 'game_id': game_id, 'message': message})}\n\n"
             else:
-                logger.error(f"Failed to launch game {game_id}")
-                yield f"data: {json.dumps({'type': 'complete', 'message': 'Game created but failed to launch'})}\n\n"
+                logger.error(f"Failed to create game {game_id}: {message}")
+                yield f"data: {json.dumps({'type': 'error', 'message': message})}\n\n"
 
         except Exception as e:
             logger.exception(f"Error in game creation: {e}")
