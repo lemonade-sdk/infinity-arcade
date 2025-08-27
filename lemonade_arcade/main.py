@@ -16,6 +16,7 @@ from typing import Dict, Optional
 
 import httpx
 import uvicorn
+from openai import AsyncOpenAI
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import (
     JSONResponse,
@@ -593,73 +594,56 @@ Generate ONLY the Python code in a single code block. Do not include any explana
                 f"Prepared messages for LLM, system prompt length: {len(system_prompt)}"
             )
 
-            # Stream response from Lemonade Server
+            # Stream response from Lemonade Server using OpenAI library
             logger.debug(
                 f"Starting request to {lemonade_handle.url}/api/v1/chat/completions"
             )
-            async with httpx.AsyncClient(timeout=600.0) as client:
-                async with client.stream(
-                    "POST",
-                    f"{lemonade_handle.url}/api/v1/chat/completions",
-                    json={
-                        "model": REQUIRED_MODEL,
-                        "messages": messages,
-                        "stream": True,
-                        "max_tokens": 4000,
-                        "temperature": 0.7,
-                    },
-                    headers={"Content-Type": "application/json"},
-                ) as response:
 
-                    logger.debug(
-                        f"Received response with status code: {response.status_code}"
-                    )
+            # Create OpenAI client pointing to Lemonade Server
+            openai_client = AsyncOpenAI(
+                base_url=f"{lemonade_handle.url}/api/v1",
+                api_key="dummy",  # lemonade-server doesn't require a real API key
+                timeout=600.0,
+            )
 
-                    if response.status_code != 200:
-                        logger.error(
-                            f"LLM request failed with status {response.status_code}"
-                        )
-                        yield f"data: {json.dumps({'type': 'error', 'message': 'Failed to connect to LLM'})}\n\n"
-                        return
+            try:
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Generating code...'})}\n\n"
+                logger.debug("Sent 'Generating code...' status")
 
-                    yield f"data: {json.dumps({'type': 'status', 'message': 'Generating code...'})}\n\n"
-                    logger.debug("Sent 'Generating code...' status")
+                full_response = ""
+                chunk_count = 0
 
-                    full_response = ""
-                    line_count = 0
-                    async for line in response.aiter_lines():
-                        line_count += 1
-                        logger.debug(f"Processing line {line_count}: {line[:100]}...")
+                # Use OpenAI library for streaming
+                stream = await openai_client.chat.completions.create(
+                    model=REQUIRED_MODEL,
+                    messages=messages,
+                    stream=True,
+                    max_tokens=4000,
+                    temperature=0.7,
+                )
 
-                        if line.startswith("data: "):
-                            try:
-                                chunk_data = json.loads(line[6:])
-                                logger.debug(f"Parsed chunk data: {chunk_data}")
+                async for chunk in stream:
+                    chunk_count += 1
+                    logger.debug(f"Processing chunk {chunk_count}: {chunk}")
 
-                                if (
-                                    "choices" in chunk_data
-                                    and len(chunk_data["choices"]) > 0
-                                ):
-                                    delta = chunk_data["choices"][0].get("delta", {})
-                                    if (
-                                        "content" in delta
-                                        and delta["content"] is not None
-                                    ):
-                                        content = delta["content"]
-                                        full_response += content
-                                        logger.debug(
-                                            f"Added content to response, total length: {len(full_response)}"
-                                        )
-                                        yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
-                            except json.JSONDecodeError as e:
-                                logger.warning(
-                                    f"Failed to parse JSON from line: {line} - Error: {e}"
-                                )
-                                continue
+                    if chunk.choices and len(chunk.choices) > 0:
+                        delta = chunk.choices[0].delta
+                        if delta.content is not None:
+                            content = delta.content
+                            full_response += content
+                            logger.debug(
+                                f"Added content to response, total length: {len(full_response)}"
+                            )
+                            yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
 
-                    logger.debug(
-                        f"Finished processing stream, total lines: {line_count}, response length: {len(full_response)}"
-                    )
+                logger.debug(
+                    f"Finished processing stream, total chunks: {chunk_count}, response length: {len(full_response)}"
+                )
+
+            except Exception as e:
+                logger.error(f"OpenAI streaming request failed: {e}")
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Failed to connect to LLM'})}\n\n"
+                return
 
             # Extract Python code
             yield f"data: {json.dumps({'type': 'status', 'message': 'Extracting code...'})}\n\n"
