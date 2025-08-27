@@ -140,11 +140,10 @@ class TestLemonadeClientIntegration(unittest.TestCase):
         self.assertIn("compatible", result)
         self.assertIn("required_version", result)
 
-        if result["installed"]:
-            self.assertTrue(
-                result["compatible"],
-                f"Server version {result['version']} should be compatible with minimum {result['required_version']}",
-            )
+        self.assertTrue(
+            result["compatible"],
+            f"Server version {result['version']} should be compatible with minimum {result['required_version']}",
+        )
 
     def test_03_start_lemonade_server(self):
         """Test starting lemonade server."""
