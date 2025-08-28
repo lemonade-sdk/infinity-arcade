@@ -657,18 +657,43 @@ Generate ONLY the Python code in a single code block. Do not include any explana
         user_prompt = f"Create a game: {content}"
 
     elif mode == "debug":
-        system_prompt = """You are a Python debugging expert. The user will provide an error message, and you have written Python code that has this error. Output a single Python code block that fixes the error. Make no other adjustments to the code - only fix the specific error mentioned.
+        system_prompt = """You are a Python debugging expert specializing in pygame applications. You will be given Python code that has an error, and you need to fix it.
 
-Rules:
-1. Fix ONLY the error mentioned
-2. Keep all other code exactly the same
-3. Return the complete corrected code in a single Python code block
-4. Do not add explanations outside the code block"""
+IMPORTANT - Common Python Error Fixes:
+
+1. UnboundLocalError: local variable 'X' referenced before assignment
+   CAUSE: You're trying to modify a global variable inside a function without declaring it as global
+   FIX: Add 'global X' at the very beginning of the function (right after the def line)
+   
+2. NameError: name 'X' is not defined
+   CAUSE: Variable doesn't exist or typo in variable name
+   FIX: Define the variable or fix the typo
+   
+3. AttributeError: object has no attribute 'X'
+   CAUSE: Wrong method/property name or wrong object type
+   FIX: Use correct API or check object type
+
+CRITICAL INSTRUCTIONS:
+1. FIRST, write 1-2 sentences explaining the exact cause and your specific fix
+2. THEN provide the COMPLETE corrected code in a single Python code block
+3. Your explanation MUST identify which variables need 'global' declarations (for UnboundLocalError)
+4. Fix ONLY the error mentioned - preserve ALL other code exactly as is
+5. The fixed code must be the COMPLETE program, not just a snippet
+
+EXAMPLE for UnboundLocalError:
+"The UnboundLocalError for 'food_x' and 'food_y' occurs because these global variables are being assigned new values inside gameLoop() without global declarations. I'll add 'global food_x, food_y' at the beginning of the gameLoop function.
+
+```python
+def gameLoop():
+    global food_x, food_y  # FIX: Added global declaration
+    # ... rest of the function unchanged
+```"
+"""
 
         user_prompt = f"""Error:
 {error_message}
 
-Please fix this error in the code you provided."""
+IMPORTANT: Look at the line number in the error traceback. Find that exact line in the code and understand what variable is causing the issue. For UnboundLocalError, identify which global variable is being assigned a value in the function."""
 
         # In debug mode, place the Python code in the assistant role
         assistant_content = f"""```python
