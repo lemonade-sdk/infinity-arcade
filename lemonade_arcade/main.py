@@ -671,43 +671,51 @@ Generate ONLY the Python code in a single code block. Do not include any explana
         user_prompt = f"Create a game: {content}"
 
     elif mode == "debug":
-        system_prompt = """You are a Python debugging expert specializing in pygame applications. You will be given Python code that has an error, and you need to fix it.
+        # Extract error type from error message
+        error_type = None
+        if "UnboundLocalError" in error_message:
+            error_type = "UnboundLocalError"
+        elif "NameError" in error_message:
+            error_type = "NameError"
+        elif "AttributeError" in error_message:
+            error_type = "AttributeError"
+        elif "TypeError" in error_message:
+            error_type = "TypeError"
+        elif "IndexError" in error_message:
+            error_type = "IndexError"
 
-IMPORTANT - Common Python Error Fixes:
+        # Build error-specific guidance
+        error_guidance = ""
+        if error_type == "UnboundLocalError":
+            error_guidance = """UnboundLocalError Fix:
+Add 'global variable_name' at the start of the function that's trying to modify a global variable."""
+        elif error_type == "NameError":
+            error_guidance = """NameError Fix:
+Either define the missing variable or fix the typo in the variable name."""
+        elif error_type == "AttributeError":
+            error_guidance = """AttributeError Fix:
+Use the correct method/attribute name or check the object type."""
+        elif error_type == "TypeError":
+            error_guidance = """TypeError Fix:
+Fix the function arguments or type mismatch."""
+        elif error_type == "IndexError":
+            error_guidance = """IndexError Fix:
+Check list/array bounds before accessing."""
 
-1. UnboundLocalError: local variable 'X' referenced before assignment
-   CAUSE: You're trying to modify a global variable inside a function without declaring it as global
-   FIX: Add 'global X' at the very beginning of the function (right after the def line)
-   
-2. NameError: name 'X' is not defined
-   CAUSE: Variable doesn't exist or typo in variable name
-   FIX: Define the variable or fix the typo
-   
-3. AttributeError: object has no attribute 'X'
-   CAUSE: Wrong method/property name or wrong object type
-   FIX: Use correct API or check object type
+        system_prompt = f"""Fix this pygame code error.
 
-CRITICAL INSTRUCTIONS:
-1. FIRST, write 1-2 sentences explaining the exact cause and your specific fix
-2. THEN provide the COMPLETE corrected code in a single Python code block
-3. Your explanation MUST identify which variables need 'global' declarations (for UnboundLocalError)
-4. Fix ONLY the error mentioned - preserve ALL other code exactly as is
-5. The fixed code must be the COMPLETE program, not just a snippet
+{error_guidance}
 
-EXAMPLE for UnboundLocalError:
-"The UnboundLocalError for 'food_x' and 'food_y' occurs because these global variables are being assigned new values inside gameLoop() without global declarations. I'll add 'global food_x, food_y' at the beginning of the gameLoop function.
+Output format:
+1. One sentence explaining the fix
+2. Complete fixed code in a python code block
 
-```python
-def gameLoop():
-    global food_x, food_y  # FIX: Added global declaration
-    # ... rest of the function unchanged
-```"
-"""
+The fixed code MUST be different from the original - apply your fix."""
 
         user_prompt = f"""Error:
 {error_message}
 
-IMPORTANT: Look at the line number in the error traceback. Find that exact line in the code and understand what variable is causing the issue. For UnboundLocalError, identify which global variable is being assigned a value in the function."""
+Fix the code. The line number in the error shows where the problem is."""
 
         # In debug mode, place the Python code in the assistant role
         assistant_content = f"""```python
