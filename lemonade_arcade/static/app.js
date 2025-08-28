@@ -1314,6 +1314,13 @@ async function createGame() {
                             setLLMOutput(fullResponse, true); // Render as markdown
                         } else if (data.type === 'status') {
                             document.getElementById('spinnerStatus').textContent = data.message;
+                            // Add error message separator when starting error fix
+                            if (data.message === 'Game hit an error, trying to fix it...') {
+                                console.log('Adding error separator to fullResponse');
+                                // Add the error message as part of the conversation history
+                                fullResponse += '\n\n<div class="error-bubble">🔧 Game encountered an error. Attempting to fix it automatically...</div>\n\n';
+                                setLLMOutput(fullResponse, true);
+                            }
                         } else if (data.type === 'complete') {
                             // Game created successfully
                             await loadGames();
@@ -1333,7 +1340,9 @@ async function createGame() {
                                 document.getElementById('gamesGrid').style.display = 'grid';
                             }
                         } else if (data.type === 'error') {
-                            document.getElementById('llmOutput').innerHTML = `<div class="error-message">Error: ${data.message}</div>`;
+                            // Append error message to existing content instead of replacing it
+                            fullResponse += `\n\n<div class="error-message">❌ Error: ${data.message}</div>`;
+                            setLLMOutput(fullResponse, true);
                             // Hide spinner on error
                             isGenerating = false;
                             document.getElementById('createBtn').disabled = false;
@@ -1361,8 +1370,9 @@ async function createGame() {
             }
         }
     } catch (error) {
-        const outputElement = document.getElementById('llmOutput');
-        outputElement.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+        // Append error message to existing content instead of replacing it
+        fullResponse += `\n\n<div class="error-message">❌ Network Error: ${error.message}</div>`;
+        setLLMOutput(fullResponse, true);
         // Hide spinner on error
         isGenerating = false;
         document.getElementById('createBtn').disabled = false;

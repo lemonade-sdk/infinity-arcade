@@ -126,25 +126,54 @@ class ArcadeGames:
         except Exception as e:
             print(f"Error saving metadata: {e}")
 
-    def launch_game(self, game_id: str) -> tuple[bool, str]:
-        """Launch a game in a separate process and capture any immediate errors."""
-        logger.debug(f"Attempting to launch game {game_id}")
+    async def launch_game(self, game_id: str, max_retries: int = 1) -> tuple[bool, str]:
+        """Launch a game in a separate process and capture any immediate errors.
+        If the game fails and it's a user-generated game, attempt to fix it using LLM.
+        This is a simple wrapper around launch_game_with_streaming for non-streaming cases.
 
-        # Check if it's a built-in game
-        if game_id in self.BUILTIN_GAMES:
-            # For built-in games, use the file from the builtin_games directory
-            builtin_games_dir = get_resource_path("builtin_games")
-            game_file = Path(builtin_games_dir) / self.BUILTIN_GAMES[game_id]["file"]
-            logger.debug(f"Looking for built-in game file at: {game_file}")
-        else:
-            # For user-generated games, use the standard games directory
-            game_file = self.games_dir / f"{game_id}.py"
-            logger.debug(f"Looking for user game file at: {game_file}")
+        Args:
+            game_id: Unique identifier for the game
+            max_retries: Maximum number of automatic retry attempts (default: 1)
 
-        if not game_file.exists():
-            logger.error(f"Game file not found: {game_file}")
-            return False, f"Game file not found: {game_file}"
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        # For non-streaming cases, we'll collect the final result from the streaming version
+        import json
 
+        final_result = None
+
+        async for stream_item in self.launch_game_with_streaming(
+            game_id, max_retries=max_retries
+        ):
+            # Parse the stream item to get the final result
+            if '"type": "complete"' in stream_item:
+                # Extract the message from the JSON
+                try:
+                    data = json.loads(stream_item.replace("data: ", "").strip())
+                    final_result = (
+                        True,
+                        data.get("message", "Game launched successfully"),
+                    )
+                except:
+                    final_result = (True, "Game launched successfully")
+                break
+            elif '"type": "error"' in stream_item:
+                # Extract the error message from the JSON
+                try:
+                    data = json.loads(stream_item.replace("data: ", "").strip())
+                    final_result = (False, data.get("message", "Game failed to launch"))
+                except:
+                    final_result = (False, "Game failed to launch")
+                break
+
+        if final_result is None:
+            final_result = (False, "Unexpected error during game launch")
+
+        return final_result
+
+    def _attempt_game_launch(self, game_id: str, game_file: Path) -> tuple[bool, str]:
+        """Attempt to launch a game and return success status and any error message."""
         # Launch the game with error capture
         try:
             # In PyInstaller environment, use the same executable with the game file as argument
@@ -320,22 +349,16 @@ class ArcadeGames:
         for game_id in finished:
             del self.running_games[game_id]
 
-    async def create_and_launch_game(
-        self, game_id: str, python_code: str, prompt: str, retry_count: int = 0
-    ) -> tuple[bool, str, Optional[str]]:
+    async def create_and_launch_game_with_streaming(
+        self, game_id: str, python_code: str, prompt: str
+    ):
         """
-        Create a new game by saving the code, generating title, saving metadata, and launching.
-
-        Args:
-            game_id: Unique identifier for the game
-            python_code: The Python code for the game
-            prompt: The original prompt used to generate the game
-            retry_count: Number of retry attempts so far
-
-        Returns:
-            tuple: (success: bool, message: str, error_for_retry: Optional[str])
+        Create a new game and launch it with streaming status and content updates.
+        This is an async generator that yields streaming messages.
         """
         try:
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Creating title...'})}\n\n"
+
             # Save the game file
             game_file = self.games_dir / f"{game_id}.py"
             logger.debug(f"Saving game to: {game_file}")
@@ -343,45 +366,158 @@ class ArcadeGames:
                 f.write(python_code)
             logger.debug("Game file saved successfully")
 
-            # Generate a proper title for the game (only on first attempt)
-            if retry_count == 0:
-                logger.debug("Generating game title")
-                game_title = await generate_game_title(prompt)
+            # Generate a proper title for the game
+            logger.debug("Generating game title")
+            game_title = await generate_game_title(prompt)
 
-                # Save metadata
-                self.game_metadata[game_id] = {
-                    "title": game_title,
-                    "created": time.time(),
-                    "prompt": prompt,
-                }
-                self.save_metadata()
-                logger.debug(f"Saved metadata for game: {game_title}")
-            else:
-                # Use existing title for retries
-                game_title = self.game_metadata[game_id]["title"]
+            # Save metadata
+            self.game_metadata[game_id] = {
+                "title": game_title,
+                "created": time.time(),
+                "prompt": prompt,
+            }
+            self.save_metadata()
+            logger.debug(f"Saved metadata for game: {game_title}")
 
-            # Launch the game
-            logger.debug("Starting game launch")
-            launch_success, launch_message = self.launch_game(game_id)
-            if launch_success:
-                logger.debug(f"Game {game_id} launched successfully")
-                return (
-                    True,
-                    f"Game '{game_title}' created and launched successfully!",
-                    None,
-                )
-            else:
-                logger.error(f"Failed to launch game {game_id}: {launch_message}")
-                # Return the error message for potential retry
-                return (
-                    False,
-                    f"Game '{game_title}' created but failed to launch",
-                    launch_message,
-                )
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Launching game...'})}\n\n"
+
+            # Use the launch_game_with_streaming method for retry logic and streaming
+            async for stream_item in self.launch_game_with_streaming(
+                game_id, game_title
+            ):
+                yield stream_item
 
         except Exception as e:
             logger.exception(f"Error in game creation: {e}")
-            return False, str(e), None
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    async def launch_game_with_streaming(
+        self, game_id: str, game_title: str = None, max_retries: int = 1
+    ):
+        """
+        Launch a game with retry logic and streaming status/content updates.
+        This is an async generator that yields streaming messages.
+        """
+        logger.debug(f"Attempting to launch game {game_id}")
+
+        if game_title is None:
+            game_title = self.game_metadata.get(game_id, {}).get("title", game_id)
+
+        retry_count = 0
+
+        while retry_count <= max_retries:
+            # Check if it's a built-in game
+            if game_id in self.BUILTIN_GAMES:
+                # For built-in games, use the file from the builtin_games directory
+                builtin_games_dir = get_resource_path("builtin_games")
+                game_file = (
+                    Path(builtin_games_dir) / self.BUILTIN_GAMES[game_id]["file"]
+                )
+                logger.debug(f"Looking for built-in game file at: {game_file}")
+            else:
+                # For user-generated games, use the standard games directory
+                game_file = self.games_dir / f"{game_id}.py"
+                logger.debug(f"Looking for user game file at: {game_file}")
+
+            if not game_file.exists():
+                logger.error(f"Game file not found: {game_file}")
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Game file not found: {game_file}'})}\n\n"
+                return
+
+            # Try to launch the game
+            success, error_message = self._attempt_game_launch(game_id, game_file)
+
+            if success:
+                message = f"Game '{game_title}' created and launched successfully!"
+                yield f"data: {json.dumps({'type': 'complete', 'game_id': game_id, 'message': message})}\n\n"
+                return
+
+            # Game failed - check if we should attempt to fix it
+            if (
+                retry_count < max_retries
+                and game_id not in self.BUILTIN_GAMES
+                and game_id in self.game_metadata
+            ):
+
+                logger.info(
+                    f"Game {game_id} failed, attempting automatic retry {retry_count + 1}"
+                )
+
+                # Send status update
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Game hit an error, trying to fix it...'})}\n\n"
+
+                # Try to fix the code using LLM with streaming
+                try:
+                    # Read the current game code
+                    with open(game_file, "r", encoding="utf-8") as f:
+                        current_code = f.read()
+
+                    logger.debug(f"Attempting to fix game {game_id} code using LLM")
+
+                    # Try to fix the code using LLM and stream the output
+                    fixed_code = None
+                    async for result in generate_game_code_with_llm(
+                        "debug", current_code, error_message
+                    ):
+                        if result is None:
+                            # Error occurred in the LLM function
+                            logger.error(
+                                "Error in generate_game_code_with_llm during debug"
+                            )
+                            break
+                        elif isinstance(result, str):
+                            # Check if this looks like final extracted code
+                            # Trust the extract_python_code function - if it's substantial and contains pygame, it's likely final code
+                            if (
+                                len(result) > 500  # Must be substantial
+                                and "pygame"
+                                in result.lower()  # Must be a pygame program
+                                and not result.startswith(
+                                    "```"
+                                )  # Should not start with markdown
+                                and (
+                                    "\n" in result or len(result) > 1000
+                                )  # Must be multi-line or very long
+                            ):
+                                # This is likely the final extracted code
+                                fixed_code = result
+                                logger.debug(
+                                    f"Received fixed code, length: {len(fixed_code)}"
+                                )
+                                break
+                            else:
+                                # This is a content chunk, stream it directly
+                                yield f"data: {json.dumps({'type': 'content', 'content': result})}\n\n"
+
+                    if fixed_code:
+                        # Save the fixed code
+                        with open(game_file, "w", encoding="utf-8") as f:
+                            f.write(fixed_code)
+                        logger.info(f"Fixed code saved for game {game_id}")
+                        retry_count += 1
+                        continue
+                    else:
+                        logger.error(f"Could not get fixed code for game {game_id}")
+                        error_msg = f"Game '{game_title}' created but failed to launch and could not be automatically fixed: {error_message}"
+                        yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                        return
+
+                except Exception as e:
+                    logger.error(f"Error attempting to fix game {game_id}: {e}")
+                    error_msg = f"Error during automatic fix: {str(e)}"
+                    yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                    return
+            else:
+                # No more retries or built-in game failed
+                error_msg = (
+                    f"Game '{game_title}' created but failed to launch: {error_message}"
+                )
+                yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                return
+
+        # Max retries exceeded
+        error_msg = f"Game '{game_title}' failed to launch after {max_retries} automatic fix attempts: {error_message}"
+        yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
 
 
 arcade_games = ArcadeGames()
@@ -505,7 +641,7 @@ Generate ONLY the Python code in a single code block. Do not include any explana
         user_prompt = f"Create a game: {content}"
 
     elif mode == "debug":
-        system_prompt = """You are a Python debugging expert. The following Python code has an error. Output a single Python code block that fixes the error. Make no other adjustments to the code - only fix the specific error mentioned.
+        system_prompt = """You are a Python debugging expert. The user will provide an error message, and you have written Python code that has this error. Output a single Python code block that fixes the error. Make no other adjustments to the code - only fix the specific error mentioned.
 
 Rules:
 1. Fix ONLY the error mentioned
@@ -516,21 +652,29 @@ Rules:
         user_prompt = f"""Error:
 {error_message}
 
-Code:
-```python
-{content}
-```
+Please fix this error in the code you provided."""
 
-Fix the error and return the corrected complete code."""
+        # In debug mode, place the Python code in the assistant role
+        assistant_content = f"""```python
+{content}
+```"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "assistant", "content": assistant_content},
+            {"role": "user", "content": user_prompt},
+        ]
     else:
         logger.error(f"Invalid mode: {mode}")
         yield None
         return  # Early return without value is allowed
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
+    # For create mode, use the original 2-message structure
+    if mode == "create":
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
 
     # Debug logging for OpenAI messages structure
     logger.debug(f"=== OpenAI Messages Debug for {mode} mode ===")
@@ -831,10 +975,18 @@ async def create_game_endpoint(request: Request):
                     yield f"data: {json.dumps({'type': 'error', 'message': 'Failed to generate code'})}\n\n"
                     return
                 elif isinstance(result, str):
-                    # Check if this looks like final extracted code (contains full Python code structure)
+                    # Check if this looks like final extracted code
+                    # Trust the extract_python_code function - if it's substantial and contains pygame, it's likely final code
                     if (
-                        "def " in result or "class " in result or "import " in result
-                    ) and len(result) > 100:
+                        len(result) > 500  # Must be substantial
+                        and "pygame" in result.lower()  # Must be a pygame program
+                        and not result.startswith(
+                            "```"
+                        )  # Should not start with markdown
+                        and (
+                            "\n" in result or len(result) > 1000
+                        )  # Must be multi-line or very long
+                    ):
                         # This is likely the final extracted code
                         python_code = result
                         logger.debug(f"Received final code, length: {len(python_code)}")
@@ -858,81 +1010,12 @@ async def create_game_endpoint(request: Request):
                 f"Successfully extracted Python code, length: {len(python_code)}"
             )
 
-            # Create and launch the game using ArcadeGames with retry logic
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Creating title...'})}\n\n"
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Launching game...'})}\n\n"
-
-            current_code = python_code
-            retry_count = 0
-            max_retries = 1  # Only allow one automatic retry
-
-            while retry_count <= max_retries:
-                success, message, error_for_retry = (
-                    await arcade_games.create_and_launch_game(
-                        game_id, current_code, prompt, retry_count
-                    )
-                )
-
-                if success:
-                    logger.debug(f"Game {game_id} created successfully: {message}")
-                    yield f"data: {json.dumps({'type': 'complete', 'game_id': game_id, 'message': message})}\n\n"
-                    return
-
-                # Game creation failed
-                if retry_count == 0:
-                    # First automatic retry
-                    logger.info(f"Game {game_id} failed, attempting automatic retry")
-                    yield f"data: {json.dumps({'type': 'status', 'message': 'Trying to fix an error...'})}\n\n"
-
-                    if error_for_retry:
-                        # Try to fix the code using LLM
-                        fixed_code = None
-                        async for result in generate_game_code_with_llm(
-                            "debug", current_code, error_for_retry
-                        ):
-                            if result is None:
-                                # Error occurred in the LLM function
-                                logger.error(
-                                    "Error in generate_game_code_with_llm during debug"
-                                )
-                                break
-                            elif isinstance(result, str):
-                                # Check if this looks like final extracted code (contains full Python code structure)
-                                if (
-                                    "def " in result
-                                    or "class " in result
-                                    or "import " in result
-                                ) and len(result) > 100:
-                                    # This is likely the final extracted code
-                                    fixed_code = result
-                                    logger.debug(
-                                        f"Received fixed code, length: {len(fixed_code)}"
-                                    )
-                                    break
-                                else:
-                                    # This is a content chunk, stream it to the client for LLM Output sidecar
-                                    yield f"data: {json.dumps({'type': 'content', 'content': result})}\n\n"
-
-                        if fixed_code:
-                            current_code = fixed_code
-                            retry_count += 1
-                            continue
-                        else:
-                            logger.error("Could not fix code automatically")
-                            break
-                    else:
-                        logger.error("No error message available for fixing")
-                        break
-
-                else:
-                    # Max retries exceeded (after automatic retry)
-                    break
-
-            # If we get here, all retries failed
-            logger.error(
-                f"Failed to create game {game_id} after {retry_count} attempts: {message}"
-            )
-            yield f"data: {json.dumps({'type': 'error', 'message': f'Failed to create game after automatic retry: {message}'})}\n\n"
+            # Create and launch the game using ArcadeGames
+            # We'll use async generator delegation to stream from create_and_launch_game
+            async for stream_item in arcade_games.create_and_launch_game_with_streaming(
+                game_id, python_code, prompt
+            ):
+                yield stream_item
 
         except Exception as e:
             logger.exception(f"Error in game creation: {e}")
@@ -960,7 +1043,7 @@ async def launch_game_endpoint(game_id: str):
     if game_id not in arcade_games.game_metadata:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    success, error_message = arcade_games.launch_game(game_id)
+    success, error_message = await arcade_games.launch_game(game_id)
     if not success:
         raise HTTPException(
             status_code=500, detail=f"Failed to launch game: {error_message}"
