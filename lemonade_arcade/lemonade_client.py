@@ -474,7 +474,10 @@ class LemonadeClient:
 
         # Use the unified function to start the server
         process = await self.execute_lemonade_server_command(
-            ["serve"], use_popen=True, stdout_file=stdout_file, stderr_file=stderr_file
+            ["serve", "--ctx-size", "16384"],
+            use_popen=True,
+            stdout_file=stdout_file,
+            stderr_file=stderr_file,
         )
 
         if process is None:
