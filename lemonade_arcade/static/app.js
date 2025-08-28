@@ -1333,7 +1333,9 @@ async function createGame() {
                                 document.getElementById('gamesGrid').style.display = 'grid';
                             }
                         } else if (data.type === 'error') {
-                            document.getElementById('llmOutput').innerHTML = `<div class="error-message">Error: ${data.message}</div>`;
+                            // Append error message to existing content instead of replacing it
+                            fullResponse += `\n\n---\n\n<div class="error-message">❌ **Error:** ${data.message}</div>`;
+                            setLLMOutput(fullResponse, true);
                             // Hide spinner on error
                             isGenerating = false;
                             document.getElementById('createBtn').disabled = false;
@@ -1361,8 +1363,9 @@ async function createGame() {
             }
         }
     } catch (error) {
-        const outputElement = document.getElementById('llmOutput');
-        outputElement.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+        // Append error message to existing content instead of replacing it
+        fullResponse += `\n\n---\n\n<div class="error-message">❌ **Network Error:** ${error.message}</div>`;
+        setLLMOutput(fullResponse, true);
         // Hide spinner on error
         isGenerating = false;
         document.getElementById('createBtn').disabled = false;
@@ -1379,33 +1382,127 @@ async function launchGame(gameId) {
         return;
     }
     
+    // Set generation state for proper server status handling
+    isGenerating = true;
+    isServerKnownOnline = true;
+    lastServerStatusTime = Date.now();
+    
     // Show spinner for launching
     document.getElementById('gameSpinner').classList.add('active');
     document.getElementById('gamesGrid').style.display = 'none';
     document.getElementById('spinnerStatus').textContent = 'Launching game...';
+    setLLMOutput('', false); // Clear output
     
     try {
         const response = await fetch(`/api/launch-game/${gameId}`, {
             method: 'POST'
         });
         
-        if (response.ok) {
-            runningGameId = gameId;
-            renderGames();
-            document.getElementById('spinnerStatus').textContent = 'Playing game...';
-            startGameStatusCheck();
-        } else {
-            alert('Failed to launch game');
-            // Hide spinner on failure
+        if (!response.ok) {
+            throw new Error('Failed to launch game');
+        }
+        
+        // Server responded successfully, update status immediately
+        isServerKnownOnline = true;
+        lastServerStatusTime = Date.now();
+        const indicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        indicator.className = 'status-indicator status-online';
+        statusText.innerHTML = '🍋 Lemonade Server Online';
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = '';
+        
+        let streamCompleted = false;
+        let streamHadError = false;
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.type === 'content') {
+                            fullResponse += data.content;
+                            setLLMOutput(fullResponse, true); // Render as markdown
+                        } else if (data.type === 'status') {
+                            document.getElementById('spinnerStatus').textContent = data.message;
+                        } else if (data.type === 'complete') {
+                            // Game launched successfully
+                            streamCompleted = true;
+                            if (data.game_id) {
+                                runningGameId = data.game_id;
+                            } else {
+                                runningGameId = gameId; // Use the original gameId if not provided
+                            }
+                            renderGames();
+                            // Keep spinner active for playing state
+                            document.getElementById('spinnerStatus').textContent = 'Playing game...';
+                            startGameStatusCheck();
+                            // Don't hide spinner here - game is now running
+                        } else if (data.type === 'error') {
+                            // Append error message to existing content instead of replacing it
+                            streamHadError = true;
+                            fullResponse += `\n\n---\n\n<div class="error-message">❌ **Error:** ${data.message}</div>`;
+                            setLLMOutput(fullResponse, true);
+                            // Hide spinner on error
+                            isGenerating = false;
+                            document.getElementById('gameSpinner').classList.remove('active');
+                            document.getElementById('gamesGrid').style.display = 'grid';
+                        }
+                    } catch (e) {
+                        // Handle potential streaming chunks from SSE format
+                        // Check if it's a streaming chunk that needs different parsing
+                        if (line.trim() === 'data: [DONE]' || line.trim() === '[DONE]') continue;
+                        
+                        // Try to parse as OpenAI streaming format
+                        try {
+                            const streamData = JSON.parse(line.slice(6));
+                            if (streamData.choices && streamData.choices[0] && streamData.choices[0].delta && streamData.choices[0].delta.content) {
+                                const content = streamData.choices[0].delta.content;
+                                fullResponse += content;
+                                setLLMOutput(fullResponse, true); // Render as markdown
+                            }
+                        } catch (e2) {
+                            // Ignore JSON parse errors for partial chunks
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Handle case where stream ended without explicit completion message
+        if (!streamCompleted && !streamHadError) {
+            // If we got content, show it; otherwise show an error
+            if (fullResponse.trim()) {
+                fullResponse += `\n\n---\n\n<div class="info-message">ℹ️ **Stream ended unexpectedly**</div>`;
+                setLLMOutput(fullResponse, true);
+            } else {
+                // No content received, treat as error
+                setLLMOutput('❌ **Launch failed:** No response received from server', true);
+            }
+            // Reset UI state
+            isGenerating = false;
             document.getElementById('gameSpinner').classList.remove('active');
             document.getElementById('gamesGrid').style.display = 'grid';
         }
     } catch (error) {
-        alert('Error launching game: ' + error.message);
+        // Append error message to existing content instead of replacing it
+        let fullResponse = '';
+        fullResponse += `\n\n---\n\n<div class="error-message">❌ **Network Error:** ${error.message}</div>`;
+        setLLMOutput(fullResponse, true);
         // Hide spinner on error
+        isGenerating = false;
         document.getElementById('gameSpinner').classList.remove('active');
         document.getElementById('gamesGrid').style.display = 'grid';
     }
+    // Note: We don't use finally here because state is managed by the streaming events
 }
 
 // Delete a game
@@ -1529,3 +1626,5 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 15000); // Check every 15 seconds
 });
+
+
