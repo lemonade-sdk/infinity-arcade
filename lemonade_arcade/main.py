@@ -446,6 +446,10 @@ class ArcadeGames:
                 # Send status update
                 yield f"data: {json.dumps({'type': 'status', 'message': 'Game hit an error, trying to fix it...'})}\n\n"
 
+                # Add a content separator to clearly mark the start of the fix attempt
+                error_separator = f"\n\n---\n\n# ⚠️ ERROR ENCOUNTERED\n\n> 🔧 **The generated game encountered an error during launch.**  \n> **Attempting to automatically fix the code...**\n\n**Error Details:**\n```\n{error_message}\n```\n\n---\n\n## 🛠️ Fix Attempt:\n\n"
+                yield f"data: {json.dumps({'type': 'content', 'content': error_separator})}\n\n"
+
                 # Try to fix the code using LLM with streaming
                 try:
                     # Read the current game code
@@ -499,25 +503,37 @@ class ArcadeGames:
                     else:
                         logger.error(f"Could not get fixed code for game {game_id}")
                         error_msg = f"Game '{game_title}' created but failed to launch and could not be automatically fixed: {error_message}"
-                        yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                        final_error_content = f"\n\n---\n\n> ❌ **FINAL ERROR**  \n> {error_msg}\n\n---\n\n"
+                        yield f"data: {json.dumps({'type': 'content', 'content': final_error_content})}\n\n"
+                        yield f"data: {json.dumps({'type': 'complete', 'message': 'Game creation failed after fix attempt'})}\n\n"
                         return
 
                 except Exception as e:
                     logger.error(f"Error attempting to fix game {game_id}: {e}")
                     error_msg = f"Error during automatic fix: {str(e)}"
-                    yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                    exception_error_content = f"\n\n---\n\n> ❌ **FIX ATTEMPT FAILED**  \n> {error_msg}\n\n---\n\n"
+                    yield f"data: {json.dumps({'type': 'content', 'content': exception_error_content})}\n\n"
+                    yield f"data: {json.dumps({'type': 'complete', 'message': 'Game creation failed during fix attempt'})}\n\n"
                     return
             else:
                 # No more retries or built-in game failed
                 error_msg = (
                     f"Game '{game_title}' created but failed to launch: {error_message}"
                 )
-                yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                no_retry_error_content = (
+                    f"\n\n---\n\n> ❌ **LAUNCH FAILED**  \n> {error_msg}\n\n---\n\n"
+                )
+                yield f"data: {json.dumps({'type': 'content', 'content': no_retry_error_content})}\n\n"
+                yield f"data: {json.dumps({'type': 'complete', 'message': 'Game creation failed'})}\n\n"
                 return
 
         # Max retries exceeded
         error_msg = f"Game '{game_title}' failed to launch after {max_retries} automatic fix attempts: {error_message}"
-        yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+        max_retry_error_content = (
+            f"\n\n---\n\n> ❌ **MAX RETRIES EXCEEDED**  \n> {error_msg}\n\n---\n\n"
+        )
+        yield f"data: {json.dumps({'type': 'content', 'content': max_retry_error_content})}\n\n"
+        yield f"data: {json.dumps({'type': 'complete', 'message': 'Game creation failed after max retries'})}\n\n"
 
 
 arcade_games = ArcadeGames()
