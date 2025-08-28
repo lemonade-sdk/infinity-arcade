@@ -25,6 +25,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.responses import Response
 
 import lemonade_arcade.lemonade_client as lc
 
@@ -67,7 +68,22 @@ app = FastAPI(title="Lemonade Arcade", version="0.1.0")
 STATIC_DIR = get_resource_path("static")
 TEMPLATES_DIR = get_resource_path("templates")
 
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# Custom StaticFiles class with no-cache headers
+class NoCacheStaticFiles(StaticFiles):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def file_response(self, *args, **kwargs) -> Response:
+        response = super().file_response(*args, **kwargs)
+        # Add no-cache headers for all static files
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+
+app.mount("/static", NoCacheStaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
@@ -502,10 +518,10 @@ class ArcadeGames:
                         continue
                     else:
                         logger.error(f"Could not get fixed code for game {game_id}")
-                        error_msg = f"Game '{game_title}' created but failed to launch and could not be automatically fixed: {error_message}"
+                        error_msg = f"Game '{game_title}' failed to launch and could not be automatically fixed: {error_message}"
                         final_error_content = f"\n\n---\n\n> ❌ **FINAL ERROR**  \n> {error_msg}\n\n---\n\n"
                         yield f"data: {json.dumps({'type': 'content', 'content': final_error_content})}\n\n"
-                        yield f"data: {json.dumps({'type': 'complete', 'message': 'Game creation failed after fix attempt'})}\n\n"
+                        yield f"data: {json.dumps({'type': 'error', 'message': 'Game launch failed after fix attempt'})}\n\n"
                         return
 
                 except Exception as e:
@@ -513,18 +529,16 @@ class ArcadeGames:
                     error_msg = f"Error during automatic fix: {str(e)}"
                     exception_error_content = f"\n\n---\n\n> ❌ **FIX ATTEMPT FAILED**  \n> {error_msg}\n\n---\n\n"
                     yield f"data: {json.dumps({'type': 'content', 'content': exception_error_content})}\n\n"
-                    yield f"data: {json.dumps({'type': 'complete', 'message': 'Game creation failed during fix attempt'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Game launch failed during fix attempt'})}\n\n"
                     return
             else:
                 # No more retries or built-in game failed
-                error_msg = (
-                    f"Game '{game_title}' created but failed to launch: {error_message}"
-                )
+                error_msg = f"Game '{game_title}' failed to launch: {error_message}"
                 no_retry_error_content = (
                     f"\n\n---\n\n> ❌ **LAUNCH FAILED**  \n> {error_msg}\n\n---\n\n"
                 )
                 yield f"data: {json.dumps({'type': 'content', 'content': no_retry_error_content})}\n\n"
-                yield f"data: {json.dumps({'type': 'complete', 'message': 'Game creation failed'})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Game launch failed'})}\n\n"
                 return
 
         # Max retries exceeded
@@ -533,7 +547,7 @@ class ArcadeGames:
             f"\n\n---\n\n> ❌ **MAX RETRIES EXCEEDED**  \n> {error_msg}\n\n---\n\n"
         )
         yield f"data: {json.dumps({'type': 'content', 'content': max_retry_error_content})}\n\n"
-        yield f"data: {json.dumps({'type': 'complete', 'message': 'Game creation failed after max retries'})}\n\n"
+        yield f"data: {json.dumps({'type': 'error', 'message': 'Game launch failed after max retries'})}\n\n"
 
 
 arcade_games = ArcadeGames()
@@ -1075,7 +1089,7 @@ async def create_game_endpoint(request: Request):
 
 @app.post("/api/launch-game/{game_id}")
 async def launch_game_endpoint(game_id: str):
-    """Launch a specific game."""
+    """Launch a specific game with streaming support for error fixes."""
     arcade_games.cleanup_finished_games()
 
     if arcade_games.running_games:
@@ -1084,13 +1098,30 @@ async def launch_game_endpoint(game_id: str):
     if game_id not in arcade_games.game_metadata:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    success, error_message = await arcade_games.launch_game(game_id)
-    if not success:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to launch game: {error_message}"
-        )
+    # Get game title for better messaging
+    game_title = arcade_games.game_metadata.get(game_id, {}).get("title", game_id)
 
-    return JSONResponse({"success": True})
+    async def generate():
+        try:
+            # Stream the launch process with potential error fixing
+            async for stream_item in arcade_games.launch_game_with_streaming(
+                game_id, game_title, max_retries=1
+            ):
+                yield stream_item
+
+        except Exception as e:
+            logger.exception(f"Error in game launch: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/plain; charset=utf-8",
+        },
+    )
 
 
 @app.get("/api/game-status/{game_id}")
