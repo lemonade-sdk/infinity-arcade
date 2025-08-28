@@ -702,20 +702,29 @@ Fix the function arguments or type mismatch."""
             error_guidance = """IndexError Fix:
 Check list/array bounds before accessing."""
 
-        system_prompt = f"""Fix this pygame code error.
+        system_prompt = f"""You are debugging someone else's pygame code that has at least one error.
 
 {error_guidance}
 
 Output format:
-1. One sentence explaining the fix
-2. Complete fixed code in a python code block
+1. One sentence explaining the fix(s)
+2. Complete CORRECTED code in a python code block
 
-The fixed code MUST be different from the original - apply your fix."""
+IMPORTANT: The code you output must have the fix(s) applied - it must be different from the broken input code."""
 
-        user_prompt = f"""Error:
+        # Try to extract line number from error message
+        import re
+
+        line_match = re.search(r"line (\d+)", error_message)
+        line_ref = (
+            f"line {line_match.group(1)}" if line_match else "the problematic line"
+        )
+
+        user_prompt = f"""The code you just saw has at least this error, if not more:
 {error_message}
 
-Fix the code. The line number in the error shows where the problem is."""
+Look at {line_ref} in the code above and fix the error(s).
+Output the COMPLETE code with your fix(s) applied."""
 
         # In debug mode, place the Python code in the assistant role
         assistant_content = f"""```python
