@@ -7,6 +7,9 @@ let isServerKnownOnline = false;
 let setupInProgress = false;
 let setupComplete = false;
 
+// Smart scroll control for LLM output
+let autoScrollEnabled = true;
+
 // New User Experience - Checklist Setup
 class SetupManager {
     constructor() {
@@ -1111,8 +1114,10 @@ function setLLMOutput(text, isMarkdown = true) {
         outputElement.textContent = text;
     }
     
-    // Auto-scroll to bottom
-    outputElement.scrollTop = outputElement.scrollHeight;
+    // Smart auto-scroll: only scroll if auto-scroll is enabled
+    if (autoScrollEnabled) {
+        outputElement.scrollTop = outputElement.scrollHeight;
+    }
 }
 
 // Check server status periodically
@@ -1513,6 +1518,32 @@ document.addEventListener('DOMContentLoaded', function() {
             hideContextMenu();
         }
     });
+    
+    // Initialize smart scroll control for LLM output
+    const outputElement = document.getElementById('llmOutput');
+    if (outputElement) {
+        outputElement.addEventListener('scroll', function() {
+            // Dynamic threshold calculation for better cross-device compatibility
+            const dynamicThreshold = Math.max(
+                5,  // Minimum 5px threshold
+                Math.min(
+                    50, // Maximum 50px threshold  
+                    this.clientHeight * 0.05  // 5% of visible height
+                )
+            );
+            
+            // Check if user is at the bottom with dynamic tolerance
+            const isAtBottom = this.scrollTop + this.clientHeight >= this.scrollHeight - dynamicThreshold;
+            
+            if (isAtBottom) {
+                // User scrolled to bottom - re-enable auto-scroll
+                autoScrollEnabled = true;
+            } else {
+                // User scrolled up - disable auto-scroll
+                autoScrollEnabled = false;
+            }
+        });
+    }
     
     // Start the new user experience setup process
     setTimeout(() => {
