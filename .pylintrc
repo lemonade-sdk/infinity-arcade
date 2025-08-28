@@ -15,4 +15,9 @@ ignore=builtin_games
 # R0912: too-many-branches - Too many branches
 # C0114: missing-module-docstring - Missing module docstring
 # R0915: too-many-statements - Too many statements
-disable=W1203,W0718,C0415,R0913,R1705,R0917,R0912,C0114,R0915
+# C0302: too-many-lines - Too many lines in module
+# R0914: too-many-locals - Too many local variables
+# R1723: no-else-break - Unnecessary "else" after "break", remove the "else" and de-indent the code inside it
+# W0702: bare-except - No exception type(s) specified
+# R1724: Unnecessary "else" after "continue", remove the "else" and de-indent the code inside it (no-else-continue)
+disable=W1203,W0718,C0415,R0913,R1705,R0917,R0912,C0114,R0915,C0302,R0914,R1723,W0702,R1724

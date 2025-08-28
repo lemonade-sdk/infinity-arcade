@@ -69,8 +69,9 @@ STATIC_DIR = get_resource_path("static")
 TEMPLATES_DIR = get_resource_path("templates")
 
 
-# Custom StaticFiles class with no-cache headers
 class NoCacheStaticFiles(StaticFiles):
+    """Custom StaticFiles class with no-cache headers"""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -155,7 +156,6 @@ class ArcadeGames:
             tuple: (success: bool, message: str)
         """
         # For non-streaming cases, we'll collect the final result from the streaming version
-        import json
 
         final_result = None
 
@@ -220,7 +220,8 @@ class ArcadeGames:
                 # Process exited within 2 seconds - this is likely an error for pygame games
                 # Even if return code is 0, pygame games should keep running
                 logger.debug(
-                    f"Game {game_id} subprocess (PID {process.pid}) EXITED after {duration:.3f} seconds with return code {process.returncode}"
+                    f"Game {game_id} subprocess (PID {process.pid}) EXITED after {duration:.3f} "
+                    f"seconds with return code {process.returncode}"
                 )
 
                 # Filter out pygame warnings from stderr to get actual errors
@@ -240,7 +241,8 @@ class ArcadeGames:
                         ]
                     ):
                         continue
-                    # Only include lines that look like actual errors (have common error indicators)
+                    # Only include lines that look like actual errors
+                    # (have common error indicators)
                     if line.strip() and any(
                         error_indicator in line
                         for error_indicator in [
@@ -268,19 +270,23 @@ class ArcadeGames:
 
                 if filtered_stderr:
                     error_msg = filtered_stderr
-                    print(f"DEBUG: Using filtered stderr as error message")
+                    print("DEBUG: Using filtered stderr as error message")
                 elif process.returncode != 0:
                     # Non-zero exit but no clear error message
-                    error_msg = f"Game exited with code {process.returncode} but no error message was captured"
-                    print(f"DEBUG: Using non-zero exit code message")
+                    error_msg = (
+                        f"Game exited with code {process.returncode} "
+                        "but no error message was captured"
+                    )
+                    print("DEBUG: Using non-zero exit code message")
                 else:
                     # Return code 0 but game exited immediately - likely missing game loop
                     error_msg = (
                         "Game completed successfully but exited immediately. "
-                        "This usually means the game is missing a proper game loop (while True loop) "
+                        "This usually means the game is missing a proper game loop "
+                        "(while True loop) "
                         "or has a logical error that causes it to finish execution quickly."
                     )
-                    print(f"DEBUG: Using missing game loop message")
+                    print("DEBUG: Using missing game loop message")
 
                 if process.returncode != 0:
                     logger.error(
@@ -291,7 +297,8 @@ class ArcadeGames:
                     )
                 else:
                     logger.error(
-                        f"Game {game_id} exited immediately (return code 0) - likely missing game loop or other issue: {error_msg}"
+                        f"Game {game_id} exited immediately (return code 0) - "
+                        "likely missing game loop or other issue: {error_msg}"
                     )
                     print(
                         f"\n=== Game {game_id} Exited Immediately (Return Code: 0) ==="
@@ -315,7 +322,8 @@ class ArcadeGames:
                 duration = end_time - start_time
                 self.running_games[game_id] = process
                 logger.debug(
-                    f"Game {game_id} subprocess (PID {process.pid}) STILL RUNNING after {duration:.3f} seconds timeout - this is GOOD for pygame games"
+                    f"Game {game_id} subprocess (PID {process.pid}) STILL RUNNING after "
+                    f"{duration:.3f} seconds timeout - this is GOOD for pygame games"
                 )
                 return True, "Game launched successfully"
 
@@ -340,7 +348,8 @@ class ArcadeGames:
                     )
                 except subprocess.TimeoutExpired:
                     logger.debug(
-                        f"Game {game_id} subprocess (PID {process.pid}) did not terminate gracefully, killing..."
+                        f"Game {game_id} subprocess (PID {process.pid}) "
+                        "did not terminate gracefully, killing..."
                     )
                     process.kill()
                     logger.debug(
@@ -358,7 +367,8 @@ class ArcadeGames:
             if process.poll() is not None:  # Process has finished
                 return_code = process.returncode
                 logger.debug(
-                    f"Game {game_id} subprocess (PID {process.pid}) FINISHED with return code {return_code} - cleaning up"
+                    f"Game {game_id} subprocess (PID {process.pid})"
+                    f"FINISHED with return code {return_code} - cleaning up"
                 )
                 finished.append(game_id)
 
@@ -437,7 +447,8 @@ class ArcadeGames:
 
             if not game_file.exists():
                 logger.error(f"Game file not found: {game_file}")
-                yield f"data: {json.dumps({'type': 'error', 'message': f'Game file not found: {game_file}'})}\n\n"
+                error_msg = f"Game file not found: {game_file}"
+                yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
                 return
 
             # Try to launch the game
@@ -445,7 +456,12 @@ class ArcadeGames:
 
             if success:
                 message = f"Game '{game_title}' created and launched successfully!"
-                yield f"data: {json.dumps({'type': 'complete', 'game_id': game_id, 'message': message})}\n\n"
+                complete_data = {
+                    "type": "complete",
+                    "game_id": game_id,
+                    "message": message,
+                }
+                yield f"data: {json.dumps(complete_data)}\n\n"
                 return
 
             # Game failed - check if we should attempt to fix it
@@ -460,10 +476,17 @@ class ArcadeGames:
                 )
 
                 # Send status update
-                yield f"data: {json.dumps({'type': 'status', 'message': 'Game hit an error, trying to fix it...'})}\n\n"
+                status_msg = "Game hit an error, trying to fix it..."
+                yield f"data: {json.dumps({'type': 'status', 'message': status_msg})}\n\n"
 
                 # Add a content separator to clearly mark the start of the fix attempt
-                error_separator = f"\n\n---\n\n# ⚠️ ERROR ENCOUNTERED\n\n> 🔧 **The generated game encountered an error during launch.**  \n> **Attempting to automatically fix the code...**\n\n**Error Details:**\n```\n{error_message}\n```\n\n---\n\n## 🛠️ Fix Attempt:\n\n"
+                error_separator = (
+                    f"\n\n---\n\n# ⚠️ ERROR ENCOUNTERED\n\n"
+                    f"> 🔧 **The generated game encountered an error during launch.**  \n"
+                    f"> **Attempting to automatically fix the code...**\n\n"
+                    f"**Error Details:**\n```\n{error_message}\n```\n\n---\n\n"
+                    f"## 🛠️ Fix Attempt:\n\n"
+                )
                 yield f"data: {json.dumps({'type': 'content', 'content': error_separator})}\n\n"
 
                 # Try to fix the code using LLM with streaming
@@ -487,7 +510,8 @@ class ArcadeGames:
                             break
                         elif isinstance(result, str):
                             # Check if this looks like final extracted code
-                            # Trust the extract_python_code function - if it's substantial and contains pygame, it's likely final code
+                            # Trust the extract_python_code function - if it's substantial
+                            # and contains pygame, it's likely final code
                             if (
                                 len(result) > 500  # Must be substantial
                                 and "pygame"
@@ -507,7 +531,8 @@ class ArcadeGames:
                                 break
                             else:
                                 # This is a content chunk, stream it directly
-                                yield f"data: {json.dumps({'type': 'content', 'content': result})}\n\n"
+                                content_data = {"type": "content", "content": result}
+                                yield f"data: {json.dumps(content_data)}\n\n"
 
                     if fixed_code:
                         # Save the fixed code
@@ -518,18 +543,35 @@ class ArcadeGames:
                         continue
                     else:
                         logger.error(f"Could not get fixed code for game {game_id}")
-                        error_msg = f"Game '{game_title}' failed to launch and could not be automatically fixed: {error_message}"
+                        error_msg = (
+                            f"Game '{game_title}' failed to launch and could not be "
+                            f"automatically fixed: {error_message}"
+                        )
+                        # pylint: disable=line-too-long
                         final_error_content = f"\n\n---\n\n> ❌ **FINAL ERROR**  \n> {error_msg}\n\n---\n\n"
-                        yield f"data: {json.dumps({'type': 'content', 'content': final_error_content})}\n\n"
-                        yield f"data: {json.dumps({'type': 'error', 'message': 'Game launch failed after fix attempt'})}\n\n"
+                        content_data = {
+                            "type": "content",
+                            "content": final_error_content,
+                        }
+                        yield f"data: {json.dumps(content_data)}\n\n"
+                        error_msg = "Game launch failed after fix attempt"
+                        error_data = {"type": "error", "message": error_msg}
+                        yield f"data: {json.dumps(error_data)}\n\n"
                         return
 
                 except Exception as e:
                     logger.error(f"Error attempting to fix game {game_id}: {e}")
                     error_msg = f"Error during automatic fix: {str(e)}"
+                    # pylint: disable=line-too-long
                     exception_error_content = f"\n\n---\n\n> ❌ **FIX ATTEMPT FAILED**  \n> {error_msg}\n\n---\n\n"
-                    yield f"data: {json.dumps({'type': 'content', 'content': exception_error_content})}\n\n"
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'Game launch failed during fix attempt'})}\n\n"
+                    content_data = {
+                        "type": "content",
+                        "content": exception_error_content,
+                    }
+                    yield f"data: {json.dumps(content_data)}\n\n"
+                    error_msg = "Game launch failed during fix attempt"
+                    error_data = {"type": "error", "message": error_msg}
+                    yield f"data: {json.dumps(error_data)}\n\n"
                     return
             else:
                 # No more retries or built-in game failed
@@ -537,17 +579,26 @@ class ArcadeGames:
                 no_retry_error_content = (
                     f"\n\n---\n\n> ❌ **LAUNCH FAILED**  \n> {error_msg}\n\n---\n\n"
                 )
-                yield f"data: {json.dumps({'type': 'content', 'content': no_retry_error_content})}\n\n"
+                content_data = {"type": "content", "content": no_retry_error_content}
+                yield f"data: {json.dumps(content_data)}\n\n"
                 yield f"data: {json.dumps({'type': 'error', 'message': 'Game launch failed'})}\n\n"
                 return
 
         # Max retries exceeded
-        error_msg = f"Game '{game_title}' failed to launch after {max_retries} automatic fix attempts: {error_message}"
+        error_msg = (
+            f"Game '{game_title}' failed to launch after {max_retries} "
+            f"automatic fix attempts: {error_message}"
+        )
         max_retry_error_content = (
             f"\n\n---\n\n> ❌ **MAX RETRIES EXCEEDED**  \n> {error_msg}\n\n---\n\n"
         )
-        yield f"data: {json.dumps({'type': 'content', 'content': max_retry_error_content})}\n\n"
-        yield f"data: {json.dumps({'type': 'error', 'message': 'Game launch failed after max retries'})}\n\n"
+        content_data = {"type": "content", "content": max_retry_error_content}
+        yield f"data: {json.dumps(content_data)}\n\n"
+        error_data = {
+            "type": "error",
+            "message": "Game launch failed after max retries",
+        }
+        yield f"data: {json.dumps(error_data)}\n\n"
 
 
 arcade_games = ArcadeGames()
@@ -627,7 +678,10 @@ def extract_python_code(llm_response: str) -> Optional[str]:
         match = re.search(pattern, llm_response, re.DOTALL)
         if match:
             code = match.group(1).strip()
-            logger.debug(f"Found code block with pattern {i+1}, length: {len(code)}")
+            pattern_num = i + 1
+            logger.debug(
+                f"Found code block with pattern {pattern_num}, length: {len(code)}"
+            )
             # Basic validation - should contain pygame
             if "pygame" in code.lower():
                 logger.debug("Code contains pygame, validation passed")
@@ -654,6 +708,7 @@ async def generate_game_code_with_llm(
     """
 
     if mode == "create":
+        # pylint: disable=line-too-long
         system_prompt = """You are an expert Python game developer. Generate a complete, working Python game using pygame based on the user's description.
 
 Rules:
@@ -669,6 +724,11 @@ Rules:
 Generate ONLY the Python code in a single code block. Do not include any explanations outside the code block."""
 
         user_prompt = f"Create a game: {content}"
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
 
     elif mode == "debug":
         # Extract error type from error message
@@ -687,6 +747,7 @@ Generate ONLY the Python code in a single code block. Do not include any explana
         # Build error-specific guidance
         error_guidance = ""
         if error_type == "UnboundLocalError":
+            # pylint: disable=line-too-long
             error_guidance = """UnboundLocalError Fix:
 Add 'global variable_name' at the start of the function that's trying to modify a global variable."""
         elif error_type == "NameError":
@@ -702,6 +763,7 @@ Fix the function arguments or type mismatch."""
             error_guidance = """IndexError Fix:
 Check list/array bounds before accessing."""
 
+        # pylint: disable=line-too-long
         system_prompt = f"""You are debugging someone else's pygame code that has at least one error.
 
 {error_guidance}
@@ -713,8 +775,6 @@ Output format:
 IMPORTANT: The code you output must have the fix(s) applied - it must be different from the broken input code."""
 
         # Try to extract line number from error message
-        import re
-
         line_match = re.search(r"line (\d+)", error_message)
         line_ref = (
             f"line {line_match.group(1)}" if line_match else "the problematic line"
@@ -740,13 +800,6 @@ Output the COMPLETE code with your fix(s) applied."""
         logger.error(f"Invalid mode: {mode}")
         yield None
         return  # Early return without value is allowed
-
-    # For create mode, use the original 2-message structure
-    if mode == "create":
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
 
     # Debug logging for OpenAI messages structure
     logger.debug(f"=== OpenAI Messages Debug for {mode} mode ===")
@@ -1044,11 +1097,13 @@ async def create_game_endpoint(request: Request):
                 if result is None:
                     # Error occurred in the LLM function
                     logger.error("Error in generate_game_code_with_llm")
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'Failed to generate code'})}\n\n"
+                    error_data = {"type": "error", "message": "Failed to generate code"}
+                    yield f"data: {json.dumps(error_data)}\n\n"
                     return
                 elif isinstance(result, str):
                     # Check if this looks like final extracted code
-                    # Trust the extract_python_code function - if it's substantial and contains pygame, it's likely final code
+                    # Trust the extract_python_code function - if it's substantial
+                    # and contains pygame, it's likely final code
                     if (
                         len(result) > 500  # Must be substantial
                         and "pygame" in result.lower()  # Must be a pygame program
@@ -1065,14 +1120,17 @@ async def create_game_endpoint(request: Request):
                         break
                     else:
                         # This is a content chunk, stream it to the client
-                        yield f"data: {json.dumps({'type': 'content', 'content': result})}\n\n"
+                        content_data = {"type": "content", "content": result}
+                        yield f"data: {json.dumps(content_data)}\n\n"
 
             # Verify we got the code
             if not python_code:
                 logger.error(
                     "Could not get Python code from generate_game_code_with_llm"
                 )
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Could not extract valid Python code from response'})}\n\n"
+                error_msg = "Could not extract valid Python code from response"
+                error_data = {"type": "error", "message": error_msg}
+                yield f"data: {json.dumps(error_data)}\n\n"
                 return
 
             yield f"data: {json.dumps({'type': 'status', 'message': 'Extracting code...'})}\n\n"
