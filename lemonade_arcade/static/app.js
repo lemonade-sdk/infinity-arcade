@@ -1333,6 +1333,11 @@ async function createGame() {
                                 document.getElementById('gamesGrid').style.display = 'grid';
                             }
                         } else if (data.type === 'error') {
+                            // Game creation failed - but the game file may have been created
+                            // so we should refresh the library to show it
+                            await loadGames();
+                            renderGames();
+                            
                             // Append error message to existing content instead of replacing it
                             fullResponse += `\n\n---\n\n<div class="error-message">❌ **Error:** ${data.message}</div>`;
                             setLLMOutput(fullResponse, true);
