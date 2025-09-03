@@ -796,7 +796,7 @@ Fix the function arguments or type mismatch."""
 Check list/array bounds before accessing."""
 
         # pylint: disable=line-too-long
-        system_prompt = f"""You are a Python expert debugging a pygame script that has an error.
+        system_prompt = """You are a Python expert debugging a pygame script that has an error.
 
 Output format:
 1. One sentence explaining the fix.
