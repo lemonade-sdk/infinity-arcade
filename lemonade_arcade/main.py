@@ -12,7 +12,8 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
+from dataclasses import dataclass
 
 import httpx
 import uvicorn
@@ -30,6 +31,24 @@ from starlette.responses import Response
 import lemonade_arcade.lemonade_client as lc
 
 lemonade_handle = lc.LemonadeClient()
+
+
+@dataclass
+class ExtractedCode:
+    """Represents successfully extracted Python code from an LLM response."""
+
+    code: str
+    length: int
+
+    def __post_init__(self):
+        """Validate the extracted code."""
+        if not self.code or not isinstance(self.code, str):
+            raise ValueError("Code must be a non-empty string")
+        if self.length != len(self.code):
+            raise ValueError("Length must match the actual code length")
+
+    def __str__(self) -> str:
+        return self.code
 
 
 # Pygame will be imported on-demand to avoid early DLL loading issues
@@ -508,31 +527,17 @@ class ArcadeGames:
                                 "Error in generate_game_code_with_llm during debug"
                             )
                             break
+                        elif isinstance(result, ExtractedCode):
+                            # This is the final extracted code from extract_python_code
+                            fixed_code = result.code
+                            logger.debug(
+                                f"Received fixed code, length: {len(fixed_code)}"
+                            )
+                            break
                         elif isinstance(result, str):
-                            # Check if this looks like final extracted code
-                            # Trust the extract_python_code function - if it's substantial
-                            # and contains pygame, it's likely final code
-                            if (
-                                len(result) > 500  # Must be substantial
-                                and "pygame"
-                                in result.lower()  # Must be a pygame program
-                                and not result.startswith(
-                                    "```"
-                                )  # Should not start with markdown
-                                and (
-                                    "\n" in result or len(result) > 1000
-                                )  # Must be multi-line or very long
-                            ):
-                                # This is likely the final extracted code
-                                fixed_code = result
-                                logger.debug(
-                                    f"Received fixed code, length: {len(fixed_code)}"
-                                )
-                                break
-                            else:
-                                # This is a content chunk, stream it directly
-                                content_data = {"type": "content", "content": result}
-                                yield f"data: {json.dumps(content_data)}\n\n"
+                            # This is a content chunk, stream it directly
+                            content_data = {"type": "content", "content": result}
+                            yield f"data: {json.dumps(content_data)}\n\n"
 
                     if fixed_code:
                         # Save the fixed code
@@ -662,9 +667,13 @@ Return ONLY the title, nothing else."""
     return fallback_title
 
 
-def extract_python_code(llm_response: str) -> Optional[str]:
+def extract_python_code(llm_response: str) -> Optional[ExtractedCode]:
     """Extract Python code block from LLM response."""
     logger.debug(f"Extracting Python code from response of length {len(llm_response)}")
+
+    # Debug: Log the first 500 and last 500 characters of the response
+    logger.debug(f"Response start: {repr(llm_response[:500])}")
+    logger.debug(f"Response end: {repr(llm_response[-500:])}")
 
     # Look for code blocks with python/py language specifier
     patterns = [
@@ -673,29 +682,52 @@ def extract_python_code(llm_response: str) -> Optional[str]:
         r"```\s*\n(.*?)\n```",  # Generic code block
     ]
 
+    # Collect all valid pygame code blocks and choose the longest one
+    valid_code_blocks = []
+
     for i, pattern in enumerate(patterns):
         logger.debug(f"Trying pattern {i+1}: {pattern}")
-        match = re.search(pattern, llm_response, re.DOTALL)
-        if match:
-            code = match.group(1).strip()
+        matches = re.findall(pattern, llm_response, re.DOTALL)
+        for match in matches:
+            code = match.strip()
             pattern_num = i + 1
             logger.debug(
                 f"Found code block with pattern {pattern_num}, length: {len(code)}"
             )
+            # Debug: Log the first 200 characters of the extracted code
+            logger.debug(f"Extracted code start: {repr(code[:200])}")
+
             # Basic validation - should contain pygame
             if "pygame" in code.lower():
                 logger.debug("Code contains pygame, validation passed")
-                return code
+                valid_code_blocks.append(code)
             else:
                 logger.warning("Code block found but doesn't contain pygame")
+                # Debug: Log what we actually found instead of pygame
+                logger.debug(f"Code content (first 300 chars): {repr(code[:300])}")
+
+    # If we found valid pygame code blocks, return the longest one (most likely to be complete)
+    if valid_code_blocks:
+        longest_code = max(valid_code_blocks, key=len)
+        logger.debug(f"Selected longest pygame code block, length: {len(longest_code)}")
+        return ExtractedCode(code=longest_code, length=len(longest_code))
 
     logger.error("No valid Python code block found in response")
+
+    # Debug: Let's also check if there are any code blocks at all
+    all_code_blocks = re.findall(r"```.*?\n(.*?)\n```", llm_response, re.DOTALL)
+    logger.debug(f"Total code blocks found: {len(all_code_blocks)}")
+    for i, block in enumerate(all_code_blocks):
+        logger.debug(
+            f"Block {i+1} length: {len(block)}, starts with: {repr(block[:100])}"
+        )
+
     return None
 
 
 async def generate_game_code_with_llm(
     mode: str, content: str, error_message: str = None
-):
+) -> Union[str, ExtractedCode, None]:
     """Unified function to generate or fix game code using LLM.
 
     Args:
@@ -748,52 +780,57 @@ Generate ONLY the Python code in a single code block. Do not include any explana
         error_guidance = ""
         if error_type == "UnboundLocalError":
             # pylint: disable=line-too-long
-            error_guidance = """UnboundLocalError Fix:
+            error_guidance = """UnboundLocalError. To fix:
 Add 'global variable_name' at the start of the function that's trying to modify a global variable."""
         elif error_type == "NameError":
-            error_guidance = """NameError Fix:
+            error_guidance = """NameError. To fix:
 Either define the missing variable or fix the typo in the variable name."""
         elif error_type == "AttributeError":
-            error_guidance = """AttributeError Fix:
+            error_guidance = """AttributeError. To fix:
 Use the correct method/attribute name or check the object type."""
         elif error_type == "TypeError":
-            error_guidance = """TypeError Fix:
+            error_guidance = """TypeError. To fix:
 Fix the function arguments or type mismatch."""
         elif error_type == "IndexError":
-            error_guidance = """IndexError Fix:
+            error_guidance = """IndexError. To fix:
 Check list/array bounds before accessing."""
 
         # pylint: disable=line-too-long
-        system_prompt = f"""You are debugging someone else's pygame code that has at least one error.
+        system_prompt = f"""You are a Python expert debugging a pygame script that has an error.
+
+Output format:
+1. One sentence explaining the fix.
+2. Incorporate the fix into a code snippet in the style of a before/after git diff.
+    a. Show the fix and a couple surrounding lines of code.
+    b. ONLY 5-10 lines of code.
+3. Complete CORRECTED code in a python code block.
+
+IMPORTANT:
+- The final code you output must have the fix applied.
+- Be CAREFUL not to get carried away repeating the old code.
+"""
+
+        # Try to extract line number from error message
+        # line_match = re.search(r"line (\d+)", error_message)
+        # line_ref = (
+        #     f"line {line_match.group(1)}" if line_match else "the problematic line"
+        # )
+
+        user_prompt = f"""The code below has this error:
+{error_message}
+
+Here is some guidance on the error:
 
 {error_guidance}
 
-Output format:
-1. One sentence explaining the fix(s)
-2. Complete CORRECTED code in a python code block
+Look at the code below and give me a complete pygame script where the error is fixed:
 
-IMPORTANT: The code you output must have the fix(s) applied - it must be different from the broken input code."""
-
-        # Try to extract line number from error message
-        line_match = re.search(r"line (\d+)", error_message)
-        line_ref = (
-            f"line {line_match.group(1)}" if line_match else "the problematic line"
-        )
-
-        user_prompt = f"""The code you just saw has at least this error, if not more:
-{error_message}
-
-Look at {line_ref} in the code above and fix the error(s).
-Output the COMPLETE code with your fix(s) applied."""
-
-        # In debug mode, place the Python code in the assistant role
-        assistant_content = f"""```python
+```python
 {content}
-```"""
-
+```
+"""
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "assistant", "content": assistant_content},
             {"role": "user", "content": user_prompt},
         ]
     else:
@@ -846,10 +883,10 @@ Output the COMPLETE code with your fix(s) applied."""
                     yield content_chunk
 
         # After all chunks, extract and yield the final code
-        python_code = extract_python_code(full_response)
-        if python_code:
+        extracted_code = extract_python_code(full_response)
+        if extracted_code:
             logger.debug(f"Successfully extracted code for {mode} mode")
-            yield python_code  # Yield the final extracted code
+            yield extracted_code  # Yield the final extracted code
         else:
             logger.error(f"Could not extract code from LLM response in {mode} mode")
             yield None
@@ -1100,28 +1137,15 @@ async def create_game_endpoint(request: Request):
                     error_data = {"type": "error", "message": "Failed to generate code"}
                     yield f"data: {json.dumps(error_data)}\n\n"
                     return
+                elif isinstance(result, ExtractedCode):
+                    # This is the final extracted code from extract_python_code
+                    python_code = result.code
+                    logger.debug(f"Received final code, length: {len(python_code)}")
+                    break
                 elif isinstance(result, str):
-                    # Check if this looks like final extracted code
-                    # Trust the extract_python_code function - if it's substantial
-                    # and contains pygame, it's likely final code
-                    if (
-                        len(result) > 500  # Must be substantial
-                        and "pygame" in result.lower()  # Must be a pygame program
-                        and not result.startswith(
-                            "```"
-                        )  # Should not start with markdown
-                        and (
-                            "\n" in result or len(result) > 1000
-                        )  # Must be multi-line or very long
-                    ):
-                        # This is likely the final extracted code
-                        python_code = result
-                        logger.debug(f"Received final code, length: {len(python_code)}")
-                        break
-                    else:
-                        # This is a content chunk, stream it to the client
-                        content_data = {"type": "content", "content": result}
-                        yield f"data: {json.dumps(content_data)}\n\n"
+                    # This is a content chunk, stream it to the client
+                    content_data = {"type": "content", "content": result}
+                    yield f"data: {json.dumps(content_data)}\n\n"
 
             # Verify we got the code
             if not python_code:
