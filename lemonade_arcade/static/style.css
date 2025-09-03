@@ -457,8 +457,61 @@ body {
     border-radius: 10px;
     padding: 20px;
     display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.input-controls {
+    display: flex;
     gap: 15px;
     align-items: center;
+}
+
+/* Remix Mode Game Title Box */
+.remix-game-title {
+    background: rgba(0, 255, 65, 0.1);
+    border: 2px solid #00ff41;
+    border-radius: 8px;
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    animation: remix-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes remix-glow {
+    0% { box-shadow: 0 0 10px rgba(0, 255, 65, 0.3); }
+    100% { box-shadow: 0 0 20px rgba(0, 255, 65, 0.5); }
+}
+
+.remix-title-text {
+    color: #00ff41;
+    font-weight: bold;
+    font-size: 1.1rem;
+    text-shadow: 0 0 5px rgba(0, 255, 65, 0.5);
+}
+
+.remix-exit-btn {
+    background: #ff4444;
+    border: none;
+    border-radius: 50%;
+    color: white;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.remix-exit-btn:hover {
+    background: #ff0000;
+    transform: scale(1.1);
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
 }
 
 .model-select {
