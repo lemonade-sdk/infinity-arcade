@@ -416,6 +416,7 @@ class ArcadeGames:
         try:
             # Different status messages for create vs remix
             if is_remix:
+                # pylint: disable=line-too-long
                 yield f"data: {json.dumps({'type': 'status', 'message': 'Saving remixed game...'})}\n\n"
                 operation = "remixed game"
             else:
@@ -752,14 +753,16 @@ def extract_python_code(llm_response: str) -> Optional[ExtractedCode]:
 
 
 async def generate_game_code_with_llm(
-    mode: str, content: str, message: str = None
+    mode: str, content: str, mode_data: str = None
 ) -> Union[str, ExtractedCode, None]:
     """Unified function to generate or fix game code using LLM.
 
     Args:
-        mode: "create" for new games, "debug" for fixing existing games, "remix" for modifying existing games
-        content: For "create" mode: user's game prompt. For "debug" mode: the buggy code. For "remix" mode: the original game code
-        message: For "debug" mode: the error that occurred. For "remix" mode: the remix prompt
+        mode: "create" for new games, "debug" for fixing existing games,
+            "remix" for modifying existing games.
+        content: For "create" mode: user's game prompt. For "debug" mode: the buggy code.
+            For "remix" mode: the original game code.
+        mode_data: For "debug" mode: the error that occurred. For "remix" mode: the remix prompt.
 
     Returns:
         Optional[str]: The generated/fixed code, or None if failed
@@ -791,15 +794,15 @@ Generate ONLY the Python code in a single code block. Do not include any explana
     elif mode == "debug":
         # Extract error type from error message
         error_type = None
-        if "UnboundLocalError" in message:
+        if "UnboundLocalError" in mode_data:
             error_type = "UnboundLocalError"
-        elif "NameError" in message:
+        elif "NameError" in mode_data:
             error_type = "NameError"
-        elif "AttributeError" in message:
+        elif "AttributeError" in mode_data:
             error_type = "AttributeError"
-        elif "TypeError" in message:
+        elif "TypeError" in mode_data:
             error_type = "TypeError"
-        elif "IndexError" in message:
+        elif "IndexError" in mode_data:
             error_type = "IndexError"
 
         # Build error-specific guidance
@@ -837,7 +840,7 @@ IMPORTANT:
 """
 
         user_prompt = f"""The code below has this error:
-{message}
+{mode_data}
 
 Here is some guidance on the error:
 
@@ -875,7 +878,7 @@ Generate ONLY the complete modified Python code in a single code block. Do not i
 {content}
 ```
 
-Please modify this game according to this request: {message}
+Please modify this game according to this request: {mode_data}
 
 Provide the complete modified game code."""
 
@@ -1154,7 +1157,6 @@ async def load_model():
 def generate_next_version_title(original_title: str) -> str:
     """Generate the next version number for a remixed game title."""
     # Check if the title already has a version number
-    import re
 
     version_match = re.search(r" v(\d+)$", original_title)
 
@@ -1344,6 +1346,7 @@ async def remix_game_endpoint(request: Request):
                 yield f"data: {json.dumps(error_data)}\n\n"
                 return
 
+            # pylint: disable=line-too-long
             yield f"data: {json.dumps({'type': 'status', 'message': 'Extracting remixed code...'})}\n\n"
             logger.debug("Remix code extraction completed")
 
@@ -1358,7 +1361,6 @@ async def remix_game_endpoint(request: Request):
             new_title = generate_next_version_title(original_title)
 
             # Create the remix prompt for metadata
-            original_prompt = arcade_games.game_metadata[game_id].get("prompt", "")
             full_remix_prompt = f"Remix of '{original_title}': {remix_prompt}"
 
             # Create and launch the remixed game using ArcadeGames
