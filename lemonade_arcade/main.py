@@ -395,25 +395,47 @@ class ArcadeGames:
             del self.running_games[game_id]
 
     async def create_and_launch_game_with_streaming(
-        self, game_id: str, python_code: str, prompt: str
+        self,
+        game_id: str,
+        python_code: str,
+        prompt: str,
+        title: str = None,
+        is_remix: bool = False,
     ):
         """
-        Create a new game and launch it with streaming status and content updates.
+        Create a new game (or remixed game) and launch it with streaming status and content updates.
         This is an async generator that yields streaming messages.
+
+        Args:
+            game_id: Unique identifier for the game
+            python_code: The game's Python code
+            prompt: The original prompt or remix description
+            title: Pre-generated title (for remixes) or None to generate one
+            is_remix: Whether this is a remix operation
         """
         try:
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Creating title...'})}\n\n"
+            # Different status messages for create vs remix
+            if is_remix:
+                # pylint: disable=line-too-long
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Saving remixed game...'})}\n\n"
+                operation = "remixed game"
+            else:
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Creating title...'})}\n\n"
+                operation = "game"
 
             # Save the game file
             game_file = self.games_dir / f"{game_id}.py"
-            logger.debug(f"Saving game to: {game_file}")
+            logger.debug(f"Saving {operation} to: {game_file}")
             with open(game_file, "w", encoding="utf-8") as f:
                 f.write(python_code)
-            logger.debug("Game file saved successfully")
+            logger.debug(f"{operation.capitalize()} file saved successfully")
 
-            # Generate a proper title for the game
-            logger.debug("Generating game title")
-            game_title = await generate_game_title(prompt)
+            # Generate title if not provided (for new games)
+            if title is None:
+                logger.debug("Generating game title")
+                game_title = await generate_game_title(prompt)
+            else:
+                game_title = title
 
             # Save metadata
             self.game_metadata[game_id] = {
@@ -422,9 +444,13 @@ class ArcadeGames:
                 "prompt": prompt,
             }
             self.save_metadata()
-            logger.debug(f"Saved metadata for game: {game_title}")
+            logger.debug(f"Saved metadata for {operation}: {game_title}")
 
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Launching game...'})}\n\n"
+            # Different launch messages for create vs remix
+            launch_message = (
+                "Launching remixed game..." if is_remix else "Launching game..."
+            )
+            yield f"data: {json.dumps({'type': 'status', 'message': launch_message})}\n\n"
 
             # Use the launch_game_with_streaming method for retry logic and streaming
             async for stream_item in self.launch_game_with_streaming(
@@ -433,7 +459,8 @@ class ArcadeGames:
                 yield stream_item
 
         except Exception as e:
-            logger.exception(f"Error in game creation: {e}")
+            error_type = "remixed game creation" if is_remix else "game creation"
+            logger.exception(f"Error in {error_type}: {e}")
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     async def launch_game_with_streaming(
@@ -726,14 +753,16 @@ def extract_python_code(llm_response: str) -> Optional[ExtractedCode]:
 
 
 async def generate_game_code_with_llm(
-    mode: str, content: str, error_message: str = None
+    mode: str, content: str, mode_data: str = None
 ) -> Union[str, ExtractedCode, None]:
     """Unified function to generate or fix game code using LLM.
 
     Args:
-        mode: "create" for new games, "debug" for fixing existing games
-        content: For "create" mode: user's game prompt. For "debug" mode: the buggy code
-        error_message: Only for "debug" mode: the error that occurred
+        mode: "create" for new games, "debug" for fixing existing games,
+            "remix" for modifying existing games.
+        content: For "create" mode: user's game prompt. For "debug" mode: the buggy code.
+            For "remix" mode: the original game code.
+        mode_data: For "debug" mode: the error that occurred. For "remix" mode: the remix prompt.
 
     Returns:
         Optional[str]: The generated/fixed code, or None if failed
@@ -765,15 +794,15 @@ Generate ONLY the Python code in a single code block. Do not include any explana
     elif mode == "debug":
         # Extract error type from error message
         error_type = None
-        if "UnboundLocalError" in error_message:
+        if "UnboundLocalError" in mode_data:
             error_type = "UnboundLocalError"
-        elif "NameError" in error_message:
+        elif "NameError" in mode_data:
             error_type = "NameError"
-        elif "AttributeError" in error_message:
+        elif "AttributeError" in mode_data:
             error_type = "AttributeError"
-        elif "TypeError" in error_message:
+        elif "TypeError" in mode_data:
             error_type = "TypeError"
-        elif "IndexError" in error_message:
+        elif "IndexError" in mode_data:
             error_type = "IndexError"
 
         # Build error-specific guidance
@@ -810,14 +839,8 @@ IMPORTANT:
 - Be CAREFUL not to get carried away repeating the old code.
 """
 
-        # Try to extract line number from error message
-        # line_match = re.search(r"line (\d+)", error_message)
-        # line_ref = (
-        #     f"line {line_match.group(1)}" if line_match else "the problematic line"
-        # )
-
         user_prompt = f"""The code below has this error:
-{error_message}
+{mode_data}
 
 Here is some guidance on the error:
 
@@ -829,6 +852,36 @@ Look at the code below and give me a complete pygame script where the error is f
 {content}
 ```
 """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    elif mode == "remix":
+        # pylint: disable=line-too-long
+        system_prompt = """You are an expert Python game developer. You will be given an existing pygame game and a modification request. Your task is to modify the existing game according to the user's request while keeping it fully functional.
+
+Rules:
+1. Use ONLY the pygame library - no external images, sounds, or files
+2. Keep the core game mechanics intact unless specifically asked to change them
+3. Make the requested modifications while ensuring the game remains playable
+4. Maintain proper pygame event handling and game loop
+5. Add comments explaining the changes you made
+6. Make sure the game window closes properly when the user clicks the X button
+7. Use reasonable colors and make the game visually appealing with pygame primitives
+
+Generate ONLY the complete modified Python code in a single code block. Do not include any explanations outside the code block."""
+
+        user_prompt = f"""Here is the existing game code:
+
+```python
+{content}
+```
+
+Please modify this game according to this request: {mode_data}
+
+Provide the complete modified game code."""
+
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -1101,6 +1154,24 @@ async def load_model():
     return JSONResponse(result)
 
 
+def generate_next_version_title(original_title: str) -> str:
+    """Generate the next version number for a remixed game title."""
+    # Check if the title already has a version number
+
+    version_match = re.search(r" v(\d+)$", original_title)
+
+    if version_match:
+        # Extract current version number and increment
+        current_version = int(version_match.group(1))
+        next_version = current_version + 1
+        # Replace the version number
+        base_title = original_title[: version_match.start()]
+        return f"{base_title} v{next_version}"
+    else:
+        # No version number, add v2
+        return f"{original_title} v2"
+
+
 @app.post("/api/create-game")
 async def create_game_endpoint(request: Request):
     """Create a new game using LLM."""
@@ -1173,6 +1244,133 @@ async def create_game_endpoint(request: Request):
 
         except Exception as e:
             logger.exception(f"Error in game creation: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/plain; charset=utf-8",
+        },
+    )
+
+
+@app.post("/api/remix-game")
+async def remix_game_endpoint(request: Request):
+    """Remix an existing game using LLM."""
+    logger.debug("Starting game remix endpoint")
+
+    data = await request.json()
+    game_id = data.get("game_id", "")
+    remix_prompt = data.get("remix_prompt", "")
+
+    logger.debug(
+        f"Received remix request - game_id: '{game_id}', remix_prompt: '{remix_prompt[:50]}...'"
+    )
+
+    if not game_id or not remix_prompt:
+        logger.error("Game ID and remix prompt are required")
+        raise HTTPException(
+            status_code=400, detail="Game ID and remix prompt are required"
+        )
+
+    # Check if the game exists
+    if game_id not in arcade_games.game_metadata:
+        logger.error(f"Game not found: {game_id}")
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    # Prevent remixing built-in games
+    if game_id in arcade_games.BUILTIN_GAMES:
+        logger.error(f"Cannot remix built-in game: {game_id}")
+        raise HTTPException(status_code=403, detail="Cannot remix built-in games")
+
+    # Generate a unique game ID for the remixed version
+    new_game_id = generate_game_id()
+    logger.debug(f"Generated new game ID for remix: {new_game_id}")
+
+    async def generate():
+        try:
+            logger.debug("Starting remix generate() function")
+            # Send status update
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Connecting to LLM...'})}\n\n"
+            logger.debug("Sent 'Connecting to LLM...' status")
+
+            # Read the original game code
+            original_game_file = arcade_games.games_dir / f"{game_id}.py"
+            if not original_game_file.exists():
+                logger.error(f"Original game file not found: {original_game_file}")
+                error_data = {
+                    "type": "error",
+                    "message": "Original game file not found",
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
+                return
+
+            with open(original_game_file, "r", encoding="utf-8") as f:
+                original_code = f.read()
+
+            logger.debug(f"Read original game code, length: {len(original_code)}")
+
+            # Use the centralized function to remix the game code
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Remixing code...'})}\n\n"
+
+            remixed_code = None
+            async for result in generate_game_code_with_llm(
+                "remix", original_code, remix_prompt
+            ):
+                if result is None:
+                    # Error occurred in the LLM function
+                    logger.error("Error in generate_game_code_with_llm during remix")
+                    error_data = {"type": "error", "message": "Failed to remix code"}
+                    yield f"data: {json.dumps(error_data)}\n\n"
+                    return
+                elif isinstance(result, ExtractedCode):
+                    # This is the final extracted code from extract_python_code
+                    remixed_code = result.code
+                    logger.debug(f"Received remixed code, length: {len(remixed_code)}")
+                    break
+                elif isinstance(result, str):
+                    # This is a content chunk, stream it to the client
+                    content_data = {"type": "content", "content": result}
+                    yield f"data: {json.dumps(content_data)}\n\n"
+
+            # Verify we got the remixed code
+            if not remixed_code:
+                logger.error(
+                    "Could not get remixed Python code from generate_game_code_with_llm"
+                )
+                error_msg = "Could not extract valid Python code from remix response"
+                error_data = {"type": "error", "message": error_msg}
+                yield f"data: {json.dumps(error_data)}\n\n"
+                return
+
+            # pylint: disable=line-too-long
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Extracting remixed code...'})}\n\n"
+            logger.debug("Remix code extraction completed")
+
+            logger.debug(
+                f"Successfully extracted remixed Python code, length: {len(remixed_code)}"
+            )
+
+            # Generate new title with version number
+            original_title = arcade_games.game_metadata[game_id].get(
+                "title", "Untitled Game"
+            )
+            new_title = generate_next_version_title(original_title)
+
+            # Create the remix prompt for metadata
+            full_remix_prompt = f"Remix of '{original_title}': {remix_prompt}"
+
+            # Create and launch the remixed game using ArcadeGames
+            async for stream_item in arcade_games.create_and_launch_game_with_streaming(
+                new_game_id, remixed_code, full_remix_prompt, new_title, is_remix=True
+            ):
+                yield stream_item
+
+        except Exception as e:
+            logger.exception(f"Error in game remix: {e}")
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     return StreamingResponse(

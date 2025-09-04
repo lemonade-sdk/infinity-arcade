@@ -183,14 +183,26 @@
         </div>
         
         <div class="input-area" id="inputArea" style="display: none;">
-            <input type="text" class="prompt-input" id="promptInput" 
-                   placeholder="Describe the game you want to create (e.g., 'snake but the food moves')" />
-            <button class="create-btn" id="createBtn" onclick="createGame()">Create Game</button>
+            <!-- Remix Mode Game Title Box -->
+            <div class="remix-game-title" id="remixGameTitle" style="display: none;">
+                <span class="remix-title-text" id="remixTitleText">Game Title</span>
+                <button class="remix-exit-btn" id="remixExitBtn" onclick="exitRemixMode()">&times;</button>
+            </div>
+            
+            <div class="input-controls">
+                <input type="text" class="prompt-input" id="promptInput" 
+                       placeholder="Describe the game you want to create (e.g., 'snake but the food moves')" />
+                <button class="create-btn" id="createBtn" onclick="createGame()">Create Game</button>
+            </div>
         </div>
     </div>
     
     <!-- Context Menu -->
     <div id="contextMenu" class="context-menu">
+        <button class="context-menu-item" id="remixGame">
+            🎨 Remix Game
+        </button>
+        <div class="context-menu-separator"></div>
         <button class="context-menu-item" id="openFile">
             📄 Open Python File
         </button>
