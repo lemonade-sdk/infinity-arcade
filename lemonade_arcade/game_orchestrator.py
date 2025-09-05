@@ -2,7 +2,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import AsyncGenerator, Union
+from typing import AsyncGenerator
 
 from lemonade_arcade.arcade_games import ArcadeGames
 from lemonade_arcade.game_launcher import GameLauncher
