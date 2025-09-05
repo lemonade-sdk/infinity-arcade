@@ -27,14 +27,13 @@ from starlette.responses import Response
 import lemonade_arcade.lemonade_client as lc
 from lemonade_arcade.arcade_games import ArcadeGames
 from lemonade_arcade.utils import get_resource_path
-from lemonade_arcade.llm import (
-    generate_game_title,
-    ExtractedCode,
-    generate_game_code_with_llm,
-)
+from lemonade_arcade.game_launcher import GameLauncher
+from lemonade_arcade.game_orchestrator import GameOrchestrator
+from lemonade_arcade.llm_service import LLMService
 
 lemonade_handle = lc.LemonadeClient()
 arcade_games = ArcadeGames()
+game_launcher = GameLauncher()
 
 
 # Pygame will be imported on-demand to avoid early DLL loading issues
@@ -45,6 +44,10 @@ if os.environ.get("LEMONADE_ARCADE_MODEL"):
     REQUIRED_MODEL = os.environ.get("LEMONADE_ARCADE_MODEL")
 else:
     REQUIRED_MODEL = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
+
+# Initialize LLM and orchestrator after REQUIRED_MODEL is set
+llm_service = LLMService(lemonade_handle, REQUIRED_MODEL)
+orchestrator = GameOrchestrator(arcade_games, game_launcher, llm_service)
 
 # Logger will be configured by CLI or set to INFO if run directly
 logger = logging.getLogger("lemonade_arcade.main")
@@ -103,7 +106,7 @@ async def server_status():
 @app.get("/api/games")
 async def get_games():
     """Get all saved games."""
-    arcade_games.cleanup_finished_games()
+    game_launcher.cleanup_finished_games()
     return JSONResponse(arcade_games.game_metadata)
 
 
@@ -319,67 +322,10 @@ async def create_game_endpoint(request: Request):
 
     async def generate():
         try:
-            logger.debug("Starting generate() function")
-            # Send status update
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Connecting to LLM...'})}\n\n"
-            logger.debug("Sent 'Connecting to LLM...' status")
-
-            # Use the centralized function to generate game code
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Generating code...'})}\n\n"
-
-            python_code = None
-            async for result in generate_game_code_with_llm(
-                lemonade_handle, REQUIRED_MODEL, "create", prompt
-            ):
-                if result is None:
-                    # Error occurred in the LLM function
-                    logger.error("Error in generate_game_code_with_llm")
-                    error_data = {"type": "error", "message": "Failed to generate code"}
-                    yield f"data: {json.dumps(error_data)}\n\n"
-                    return
-                elif isinstance(result, ExtractedCode):
-                    # This is the final extracted code from extract_python_code
-                    python_code = result.code
-                    logger.debug(f"Received final code, length: {len(python_code)}")
-                    break
-                elif isinstance(result, str):
-                    # This is a content chunk, stream it to the client
-                    content_data = {"type": "content", "content": result}
-                    yield f"data: {json.dumps(content_data)}\n\n"
-
-            # Verify we got the code
-            if not python_code:
-                logger.error(
-                    "Could not get Python code from generate_game_code_with_llm"
-                )
-                error_msg = "Could not extract valid Python code from response"
-                error_data = {"type": "error", "message": error_msg}
-                yield f"data: {json.dumps(error_data)}\n\n"
-                return
-
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Extracting code...'})}\n\n"
-            logger.debug("Code extraction completed")
-
-            logger.debug(
-                f"Successfully extracted Python code, length: {len(python_code)}"
-            )
-
-            game_title = await generate_game_title(
-                lemonade_handle, REQUIRED_MODEL, prompt
-            )
-
-            # Create and launch the game using ArcadeGames
-            # We'll use async generator delegation to stream from create_and_launch_game
-            async for stream_item in arcade_games.create_and_launch_game_with_streaming(
-                lemonade_handle,
-                REQUIRED_MODEL,
-                game_id,
-                python_code,
-                prompt,
-                game_title=game_title,
+            async for stream_item in orchestrator.create_and_launch_game_with_streaming(
+                game_id, prompt
             ):
                 yield stream_item
-
         except Exception as e:
             logger.exception(f"Error in game creation: {e}")
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -430,86 +376,12 @@ async def remix_game_endpoint(request: Request):
 
     async def generate():
         try:
-            logger.debug("Starting remix generate() function")
-            # Send status update
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Connecting to LLM...'})}\n\n"
-            logger.debug("Sent 'Connecting to LLM...' status")
-
-            # Read the original game code
-            original_game_file = arcade_games.games_dir / f"{game_id}.py"
-            if not original_game_file.exists():
-                logger.error(f"Original game file not found: {original_game_file}")
-                error_data = {
-                    "type": "error",
-                    "message": "Original game file not found",
-                }
-                yield f"data: {json.dumps(error_data)}\n\n"
-                return
-
-            with open(original_game_file, "r", encoding="utf-8") as f:
-                original_code = f.read()
-
-            logger.debug(f"Read original game code, length: {len(original_code)}")
-
-            # Use the centralized function to remix the game code
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Remixing code...'})}\n\n"
-
-            remixed_code = None
-            async for result in generate_game_code_with_llm(
-                lemonade_handle, REQUIRED_MODEL, "remix", original_code, remix_prompt
-            ):
-                if result is None:
-                    # Error occurred in the LLM function
-                    logger.error("Error in generate_game_code_with_llm during remix")
-                    error_data = {"type": "error", "message": "Failed to remix code"}
-                    yield f"data: {json.dumps(error_data)}\n\n"
-                    return
-                elif isinstance(result, ExtractedCode):
-                    # This is the final extracted code from extract_python_code
-                    remixed_code = result.code
-                    logger.debug(f"Received remixed code, length: {len(remixed_code)}")
-                    break
-                elif isinstance(result, str):
-                    # This is a content chunk, stream it to the client
-                    content_data = {"type": "content", "content": result}
-                    yield f"data: {json.dumps(content_data)}\n\n"
-
-            # Verify we got the remixed code
-            if not remixed_code:
-                logger.error(
-                    "Could not get remixed Python code from generate_game_code_with_llm"
-                )
-                error_msg = "Could not extract valid Python code from remix response"
-                error_data = {"type": "error", "message": error_msg}
-                yield f"data: {json.dumps(error_data)}\n\n"
-                return
-
-            # pylint: disable=line-too-long
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Extracting remixed code...'})}\n\n"
-            logger.debug("Remix code extraction completed")
-
-            logger.debug(
-                f"Successfully extracted remixed Python code, length: {len(remixed_code)}"
-            )
-
-            # Generate new title with version number
             original_title = arcade_games.game_metadata[game_id].get(
                 "title", "Untitled Game"
             )
             new_title = generate_next_version_title(original_title)
-
-            # Create the remix prompt for metadata
-            full_remix_prompt = f"Remix of '{original_title}': {remix_prompt}"
-
-            # Create and launch the remixed game using ArcadeGames
-            async for stream_item in arcade_games.create_and_launch_game_with_streaming(
-                lemonade_handle,
-                REQUIRED_MODEL,
-                new_game_id,
-                remixed_code,
-                full_remix_prompt,
-                new_title,
-                is_remix=True,
+            async for stream_item in orchestrator.remix_and_launch_game_with_streaming(
+                game_id, new_game_id, remix_prompt, new_title
             ):
                 yield stream_item
 
@@ -531,9 +403,9 @@ async def remix_game_endpoint(request: Request):
 @app.post("/api/launch-game/{game_id}")
 async def launch_game_endpoint(game_id: str):
     """Launch a specific game with streaming support for error fixes."""
-    arcade_games.cleanup_finished_games()
+    game_launcher.cleanup_finished_games()
 
-    if arcade_games.running_games:
+    if game_launcher.running_games:
         raise HTTPException(status_code=400, detail="Another game is already running")
 
     if game_id not in arcade_games.game_metadata:
@@ -544,12 +416,10 @@ async def launch_game_endpoint(game_id: str):
 
     async def generate():
         try:
-            # Stream the launch process with potential error fixing
-            async for stream_item in arcade_games.launch_game_with_streaming(
-                lemonade_handle, REQUIRED_MODEL, game_id, game_title, max_retries=1
+            async for stream_item in orchestrator.launch_game_with_auto_fix_streaming(
+                game_id, game_title, max_retries=1
             ):
                 yield stream_item
-
         except Exception as e:
             logger.exception(f"Error in game launch: {e}")
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -568,8 +438,8 @@ async def launch_game_endpoint(game_id: str):
 @app.get("/api/game-status/{game_id}")
 async def game_status(game_id: str):
     """Check if a game is currently running."""
-    arcade_games.cleanup_finished_games()
-    running = game_id in arcade_games.running_games
+    game_launcher.cleanup_finished_games()
+    running = game_id in game_launcher.running_games
     return JSONResponse({"running": running})
 
 
@@ -584,8 +454,8 @@ async def delete_game_endpoint(game_id: str):
         raise HTTPException(status_code=403, detail="Cannot delete built-in games")
 
     # Stop the game if it's running
-    if game_id in arcade_games.running_games:
-        arcade_games.stop_game(game_id)
+    if game_id in game_launcher.running_games:
+        game_launcher.stop_game(game_id)
 
     # Delete the file
     game_file = arcade_games.games_dir / f"{game_id}.py"
@@ -736,8 +606,8 @@ def main():
     except KeyboardInterrupt:
         print("\nShutting down Lemonade Arcade...")
         # Clean up any running games
-        for game_id in list(arcade_games.running_games.keys()):
-            arcade_games.stop_game(game_id)
+        for game_id in list(game_launcher.running_games.keys()):
+            game_launcher.stop_game(game_id)
 
 
 if __name__ == "__main__":

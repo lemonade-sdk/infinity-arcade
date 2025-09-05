@@ -1,12 +1,13 @@
 import logging
 import re
-from typing import Optional, Union
 from dataclasses import dataclass
+from typing import AsyncGenerator, Optional, Union
 
 import httpx
 from openai import AsyncOpenAI
 
 from lemonade_arcade.lemonade_client import LemonadeClient
+
 
 logger = logging.getLogger("lemonade_arcade.main")
 
@@ -19,7 +20,6 @@ class ExtractedCode:
     length: int
 
     def __post_init__(self):
-        """Validate the extracted code."""
         if not self.code or not isinstance(self.code, str):
             raise ValueError("Code must be a non-empty string")
         if self.length != len(self.code):
@@ -32,7 +32,6 @@ class ExtractedCode:
 async def generate_game_title(
     lemonade_handle: LemonadeClient, model: str, prompt: str
 ) -> str:
-    """Generate a short title for the game based on the prompt."""
     logger.debug(f"Generating title for prompt: {prompt[:50]}...")
 
     try:
@@ -72,9 +71,7 @@ Return ONLY the title, nothing else."""
                 data = response.json()
                 if "choices" in data and len(data["choices"]) > 0:
                     title = data["choices"][0]["message"]["content"].strip()
-                    # Clean up the title - remove quotes and extra text
                     title = title.strip("\"'").split("\n")[0].strip()
-                    # Limit to 3 words max
                     words = title.split()[:3]
                     final_title = " ".join(words)
                     logger.debug(f"Generated title: {final_title}")
@@ -82,68 +79,50 @@ Return ONLY the title, nothing else."""
     except Exception as e:
         logger.warning(f"Failed to generate title: {e}")
 
-    # Fallback to extracting from prompt
-    title_words = prompt.split()[:3]
-    fallback_title = " ".join(title_words).title()
+    fallback_title = " ".join(prompt.split()[:3]).title()
     logger.debug(f"Using fallback title: {fallback_title}")
     return fallback_title
 
 
 def _extract_python_code(llm_response: str) -> Optional[ExtractedCode]:
-    """Extract Python code block from LLM response."""
     logger.debug(f"Extracting Python code from response of length {len(llm_response)}")
 
-    # Debug: Log the first 500 and last 500 characters of the response
     logger.debug(f"Response start: {repr(llm_response[:500])}")
     logger.debug(f"Response end: {repr(llm_response[-500:])}")
 
-    # Look for code blocks with python/py language specifier
     patterns = [
         r"```python\s*\n(.*?)\n```",
         r"```py\s*\n(.*?)\n```",
-        r"```\s*\n(.*?)\n```",  # Generic code block
+        r"```\s*\n(.*?)\n```",
     ]
 
-    # Collect all valid pygame code blocks and choose the longest one
     valid_code_blocks = []
-
     for i, pattern in enumerate(patterns):
         logger.debug(f"Trying pattern {i+1}: {pattern}")
         matches = re.findall(pattern, llm_response, re.DOTALL)
         for match in matches:
             code = match.strip()
-            pattern_num = i + 1
-            logger.debug(
-                f"Found code block with pattern {pattern_num}, length: {len(code)}"
-            )
-            # Debug: Log the first 200 characters of the extracted code
+            logger.debug(f"Found code block with pattern {i+1}, length: {len(code)}")
             logger.debug(f"Extracted code start: {repr(code[:200])}")
-
-            # Basic validation - should contain pygame
             if "pygame" in code.lower():
                 logger.debug("Code contains pygame, validation passed")
                 valid_code_blocks.append(code)
             else:
                 logger.warning("Code block found but doesn't contain pygame")
-                # Debug: Log what we actually found instead of pygame
                 logger.debug(f"Code content (first 300 chars): {repr(code[:300])}")
 
-    # If we found valid pygame code blocks, return the longest one (most likely to be complete)
     if valid_code_blocks:
         longest_code = max(valid_code_blocks, key=len)
         logger.debug(f"Selected longest pygame code block, length: {len(longest_code)}")
         return ExtractedCode(code=longest_code, length=len(longest_code))
 
     logger.error("No valid Python code block found in response")
-
-    # Debug: Let's also check if there are any code blocks at all
     all_code_blocks = re.findall(r"```.*?\n(.*?)\n```", llm_response, re.DOTALL)
     logger.debug(f"Total code blocks found: {len(all_code_blocks)}")
     for i, block in enumerate(all_code_blocks):
         logger.debug(
             f"Block {i+1} length: {len(block)}, starts with: {repr(block[:100])}"
         )
-
     return None
 
 
@@ -152,21 +131,8 @@ async def generate_game_code_with_llm(
     model: str,
     mode: str,
     content: str,
-    mode_data: str = None,
+    mode_data: str | None = None,
 ) -> Union[str, ExtractedCode, None]:
-    """Unified function to generate or fix game code using LLM.
-
-    Args:
-        mode: "create" for new games, "debug" for fixing existing games,
-            "remix" for modifying existing games.
-        content: For "create" mode: user's game prompt. For "debug" mode: the buggy code.
-            For "remix" mode: the original game code.
-        mode_data: For "debug" mode: the error that occurred. For "remix" mode: the remix prompt.
-
-    Returns:
-        Optional[str]: The generated/fixed code, or None if failed
-    """
-
     if mode == "create":
         # pylint: disable=line-too-long
         system_prompt = """You are an expert Python game developer. Generate a complete, working Python game using pygame based on the user's description.
@@ -184,30 +150,25 @@ Rules:
 Generate ONLY the Python code in a single code block. Do not include any explanations outside the code block."""
 
         user_prompt = f"Create a game: {content}"
-
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-
     elif mode == "debug":
-        # Extract error type from error message
         error_type = None
-        if "UnboundLocalError" in mode_data:
+        if mode_data and "UnboundLocalError" in mode_data:
             error_type = "UnboundLocalError"
-        elif "NameError" in mode_data:
+        elif mode_data and "NameError" in mode_data:
             error_type = "NameError"
-        elif "AttributeError" in mode_data:
+        elif mode_data and "AttributeError" in mode_data:
             error_type = "AttributeError"
-        elif "TypeError" in mode_data:
+        elif mode_data and "TypeError" in mode_data:
             error_type = "TypeError"
-        elif "IndexError" in mode_data:
+        elif mode_data and "IndexError" in mode_data:
             error_type = "IndexError"
 
-        # Build error-specific guidance
         error_guidance = ""
         if error_type == "UnboundLocalError":
-            # pylint: disable=line-too-long
             error_guidance = """UnboundLocalError. To fix:
 Add 'global variable_name' at the start of the function that's trying to modify a global variable."""
         elif error_type == "NameError":
@@ -223,7 +184,6 @@ Fix the function arguments or type mismatch."""
             error_guidance = """IndexError. To fix:
 Check list/array bounds before accessing."""
 
-        # pylint: disable=line-too-long
         system_prompt = """You are a Python expert debugging a pygame script that has an error.
 
 Output format:
@@ -255,9 +215,7 @@ Look at the code below and give me a complete pygame script where the error is f
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-
     elif mode == "remix":
-        # pylint: disable=line-too-long
         system_prompt = """You are an expert Python game developer. You will be given an existing pygame game and a modification request. Your task is to modify the existing game according to the user's request while keeping it fully functional.
 
 Rules:
@@ -288,28 +246,25 @@ Provide the complete modified game code."""
     else:
         logger.error(f"Invalid mode: {mode}")
         yield None
-        return  # Early return without value is allowed
+        return
 
-    # Debug logging for OpenAI messages structure
     logger.debug(f"=== OpenAI Messages Debug for {mode} mode ===")
     logger.debug(f"Number of messages: {len(messages)}")
     for i, message in enumerate(messages):
         role = message["role"]
-        content = message["content"]
-        content_length = len(content)
+        content_text = message["content"]
+        content_length = len(content_text)
         logger.debug(
             f"Message {i+1} - Role: {role}, Content length: {content_length} chars"
         )
-        # Log first 200 chars and last 100 chars to see structure without overwhelming logs
         if content_length <= 300:
-            logger.debug(f"Message {i+1} - Full content: {repr(content)}")
+            logger.debug(f"Message {i+1} - Full content: {repr(content_text)}")
         else:
-            logger.debug(f"Message {i+1} - Content start: {repr(content[:200])}")
-            logger.debug(f"Message {i+1} - Content end: {repr(content[-100:])}")
+            logger.debug(f"Message {i+1} - Content start: {repr(content_text[:200])}")
+            logger.debug(f"Message {i+1} - Content end: {repr(content_text[-100:])}")
     logger.debug("=== End OpenAI Messages Debug ===")
 
     try:
-        # Create OpenAI client pointing to Lemonade Server
         openai_client = AsyncOpenAI(
             base_url=f"{lemonade_handle.url}/api/v1",
             api_key="dummy",
@@ -319,11 +274,10 @@ Provide the complete modified game code."""
         response = await openai_client.chat.completions.create(
             model=model,
             messages=messages,
-            stream=True,  # Always stream for both create and debug modes
+            stream=True,
             max_tokens=4000,
         )
 
-        # Handle streaming response for both create and debug modes
         full_response = ""
         async for chunk in response:
             if chunk.choices and len(chunk.choices) > 0:
@@ -331,18 +285,34 @@ Provide the complete modified game code."""
                 if delta.content is not None:
                     content_chunk = delta.content
                     full_response += content_chunk
-                    # Yield the content chunk for streaming to LLM Output sidecar
                     yield content_chunk
 
-        # After all chunks, extract and yield the final code
         extracted_code = _extract_python_code(full_response)
         if extracted_code:
             logger.debug(f"Successfully extracted code for {mode} mode")
-            yield extracted_code  # Yield the final extracted code
+            yield extracted_code
         else:
             logger.error(f"Could not extract code from LLM response in {mode} mode")
             yield None
-
     except Exception as e:
         logger.error(f"Error calling LLM for {mode}: {e}")
         yield None
+
+
+class LLMService:
+    """Centralized service for all LLM-related operations used by the arcade."""
+
+    def __init__(self, lemonade_handle: LemonadeClient, model: str):
+        self._lemonade_handle = lemonade_handle
+        self._model = model
+
+    async def stream_game_code(
+        self, mode: str, content: str, mode_data: str | None = None
+    ) -> AsyncGenerator[Union[str, ExtractedCode, None], None]:
+        async for chunk in generate_game_code_with_llm(
+            self._lemonade_handle, self._model, mode, content, mode_data
+        ):
+            yield chunk
+
+    async def generate_title(self, prompt: str) -> str:
+        return await generate_game_title(self._lemonade_handle, self._model, prompt)
