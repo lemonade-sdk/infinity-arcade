@@ -11,7 +11,7 @@ from typing import List, Dict, Optional
 import httpx
 
 
-LEMONADE_MINIMUM_VERSION = "8.1.5"
+LEMONADE_MINIMUM_VERSION = "8.1.9"
 
 # Model information: (model_name, size_gb)
 MODELS = {

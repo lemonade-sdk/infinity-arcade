@@ -735,7 +735,8 @@ class SetupManager {
             btn.textContent = 'Installing...';
         }
         
-        this.updateCheckStatus('model', 'pending', 'Installing required model (18.6 GB - this may take several minutes)...');
+        const sizeText = selectedModelInfo.size_display ? ` (${selectedModelInfo.size_display} - this may take several minutes)` : ' (this may take several minutes)';
+        this.updateCheckStatus('model', 'pending', `Installing required model${sizeText}...`);
         
         // Always show built-in games section during download
         this.showBuiltinGamesSection();
@@ -764,9 +765,10 @@ class SetupManager {
                     this.startSetup();
                 }, 2000);
             } else {
+                const retryButtonText = selectedModelInfo.size_display ? `Retry Install (${selectedModelInfo.size_display})` : 'Retry Install';
                 this.updateCheckStatus('model', 'error', 
                     `Model installation failed: ${result.message}`,
-                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+                    true, retryButtonText, () => this.installModel());
                 
                 // Hide built-in games section on error
                 this.hideBuiltinGamesSection();
@@ -774,13 +776,15 @@ class SetupManager {
         } catch (error) {
             console.error('Model installation failed:', error);
             if (error.name === 'AbortError') {
+                const retryButtonText = selectedModelInfo.size_display ? `Retry Install (${selectedModelInfo.size_display})` : 'Retry Install';
                 this.updateCheckStatus('model', 'error', 
                     'Model installation timed out after 30 minutes',
-                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+                    true, retryButtonText, () => this.installModel());
             } else {
+                const retryButtonText = selectedModelInfo.size_display ? `Retry Install (${selectedModelInfo.size_display})` : 'Retry Install';
                 this.updateCheckStatus('model', 'error', 
                     'Model installation failed due to network error',
-                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+                    true, retryButtonText, () => this.installModel());
             }
             
             // Hide built-in games section on error
