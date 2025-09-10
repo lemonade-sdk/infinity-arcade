@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 import httpx
 import platform
+import json
+import time
 
 # Add the lemonade_arcade package to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -915,6 +917,193 @@ class TestLemonadeClient(unittest.TestCase):
 
             self.assertFalse(result["success"])
             self.assertIn("Error loading model", result["message"])
+
+    async def test_get_system_info_success(self):
+        """Test getting system info successfully."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "OS Version": "Windows-10-10.0.26100-SP0",
+            "Processor": "AMD Ryzen AI 9 HX 370 w/ Radeon 890M",
+            "Physical Memory": "32.0 GB",
+            "devices": {
+                "cpu": {"name": "AMD Ryzen AI 9 HX 370", "available": True},
+                "amd_igpu": {"name": "AMD Radeon 890M Graphics", "available": True},
+                "amd_dgpu": [
+                    {"available": False, "error": "No AMD discrete GPU found"}
+                ],
+                "npu": {"name": "AMD NPU", "available": True},
+            },
+        }
+
+        with patch("httpx.AsyncClient") as mock_client, patch(
+            "builtins.open", mock_open()
+        ) as mock_file, patch("os.path.exists", return_value=False), patch(
+            "os.makedirs"
+        ):
+
+            mock_client.return_value.__aenter__.return_value.get.return_value = (
+                mock_response
+            )
+
+            with patch("tempfile.mkdtemp") as mock_mkdtemp:
+                mock_mkdtemp.return_value = "/tmp/test"
+                result = await self.client.get_system_info()
+
+            self.assertIsInstance(result, dict)
+            self.assertEqual(result["OS Version"], "Windows-10-10.0.26100-SP0")
+            self.assertIn("devices", result)
+
+    async def test_get_system_info_cached(self):
+        """Test getting system info from cache."""
+        cached_data = {
+            "OS Version": "Linux-Ubuntu-22.04",
+            "Physical Memory": "16.0 GB",
+            "devices": {"cpu": {"available": True}},
+        }
+
+        with patch("os.path.exists", return_value=True), patch(
+            "builtins.open", mock_open(read_data=json.dumps(cached_data))
+        ), patch("os.path.getmtime", return_value=time.time()):
+
+            result = await self.client.get_system_info(cache_duration_hours=24)
+
+            self.assertEqual(result, cached_data)
+
+    async def test_get_system_info_api_failure(self):
+        """Test getting system info when API fails."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+
+        with patch("httpx.AsyncClient") as mock_client, patch(
+            "os.path.exists", return_value=False
+        ):
+
+            mock_client.return_value.__aenter__.return_value.get.return_value = (
+                mock_response
+            )
+
+            result = await self.client.get_system_info()
+            self.assertIsNone(result)
+
+    def test_parse_memory_size(self):
+        """Test parsing memory size strings."""
+        self.assertEqual(self.client._parse_memory_size("32.0 GB"), 32.0)
+        self.assertEqual(self.client._parse_memory_size("16 GB"), 16.0)
+        self.assertEqual(self.client._parse_memory_size("8.5 GB"), 8.5)
+        self.assertEqual(self.client._parse_memory_size("invalid"), 0.0)
+
+    def test_check_discrete_gpu_vram(self):
+        """Test checking discrete GPU VRAM."""
+        # Test with NVIDIA GPU having enough VRAM
+        devices_nvidia_good = {"nvidia_dgpu": [{"available": True, "memory_gb": 20.0}]}
+        self.assertTrue(self.client._check_discrete_gpu_vram(devices_nvidia_good))
+
+        # Test with NVIDIA GPU not having enough VRAM
+        devices_nvidia_bad = {"nvidia_dgpu": [{"available": True, "memory_gb": 8.0}]}
+        self.assertFalse(self.client._check_discrete_gpu_vram(devices_nvidia_bad))
+
+        # Test with AMD GPU having enough VRAM
+        devices_amd_good = {"amd_dgpu": [{"available": True, "memory_gb": 18.0}]}
+        self.assertTrue(self.client._check_discrete_gpu_vram(devices_amd_good))
+
+        # Test with no discrete GPU
+        devices_no_dgpu = {
+            "nvidia_dgpu": [{"available": False}],
+            "amd_dgpu": [{"available": False}],
+        }
+        self.assertFalse(self.client._check_discrete_gpu_vram(devices_no_dgpu))
+
+    def test_is_npu_available(self):
+        """Test checking NPU availability."""
+        # Test with available NPU
+        devices_with_npu = {"npu": {"available": True, "name": "AMD NPU"}}
+        self.assertTrue(self.client._is_npu_available(devices_with_npu))
+
+        # Test with unavailable NPU
+        devices_no_npu = {"npu": {"available": False}}
+        self.assertFalse(self.client._is_npu_available(devices_no_npu))
+
+        # Test with missing NPU key
+        devices_missing_npu = {"cpu": {"available": True}}
+        self.assertFalse(self.client._is_npu_available(devices_missing_npu))
+
+    async def test_select_model_for_hardware_high_end(self):
+        """Test model selection for high-end hardware (64GB+ RAM)."""
+        system_info = {
+            "Physical Memory": "64.0 GB",
+            "devices": {
+                "nvidia_dgpu": [{"available": False}],
+                "amd_dgpu": [{"available": False}],
+                "npu": {"available": False},
+            },
+        }
+
+        with patch.object(self.client, "get_system_info", return_value=system_info):
+            model_name, size_gb = await self.client.select_model_for_hardware()
+
+            self.assertEqual(model_name, "Qwen3-Coder-30B-A3B-Instruct-GGUF")
+            self.assertEqual(size_gb, 18.6)
+
+    async def test_select_model_for_hardware_high_end_gpu(self):
+        """Test model selection for high-end hardware (16GB+ VRAM)."""
+        system_info = {
+            "Physical Memory": "32.0 GB",
+            "devices": {
+                "nvidia_dgpu": [{"available": True, "memory_gb": 20.0}],
+                "amd_dgpu": [{"available": False}],
+                "npu": {"available": False},
+            },
+        }
+
+        with patch.object(self.client, "get_system_info", return_value=system_info):
+            model_name, size_gb = await self.client.select_model_for_hardware()
+
+            self.assertEqual(model_name, "Qwen3-Coder-30B-A3B-Instruct-GGUF")
+            self.assertEqual(size_gb, 18.6)
+
+    async def test_select_model_for_hardware_npu(self):
+        """Test model selection for NPU hardware."""
+        system_info = {
+            "Physical Memory": "32.0 GB",
+            "devices": {
+                "nvidia_dgpu": [{"available": False}],
+                "amd_dgpu": [{"available": False}],
+                "npu": {"available": True, "name": "AMD NPU"},
+            },
+        }
+
+        with patch.object(self.client, "get_system_info", return_value=system_info):
+            model_name, size_gb = await self.client.select_model_for_hardware()
+
+            self.assertEqual(model_name, "Qwen-2.5-7B-Instruct-Hybrid")
+            self.assertEqual(size_gb, 8.4)
+
+    async def test_select_model_for_hardware_default(self):
+        """Test model selection for default hardware."""
+        system_info = {
+            "Physical Memory": "16.0 GB",
+            "devices": {
+                "nvidia_dgpu": [{"available": False}],
+                "amd_dgpu": [{"available": False}],
+                "npu": {"available": False},
+            },
+        }
+
+        with patch.object(self.client, "get_system_info", return_value=system_info):
+            model_name, size_gb = await self.client.select_model_for_hardware()
+
+            self.assertEqual(model_name, "Qwen3-4B-Instruct-2507-GGUF")
+            self.assertEqual(size_gb, 2.5)
+
+    async def test_select_model_for_hardware_system_info_failure(self):
+        """Test model selection when system info fails."""
+        with patch.object(self.client, "get_system_info", return_value=None):
+            model_name, size_gb = await self.client.select_model_for_hardware()
+
+            # Should return default model
+            self.assertEqual(model_name, "Qwen3-4B-Instruct-2507-GGUF")
+            self.assertEqual(size_gb, 2.5)
 
 
 def run_async_test(coro):

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 import asyncio
 import sys
 import os
@@ -10,8 +11,9 @@ import signal
 from pathlib import Path
 
 # Add the lemonade_arcade package to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lemonade_arcade"))
-from lemonade_arcade.lemonade_client import LemonadeClient, LEMONADE_MINIMUM_VERSION
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from lemonade_arcade.lemonade_client import LemonadeClient
+from lemonade_arcade.main import LEMONADE_MINIMUM_VERSION
 
 
 class TestLemonadeClientIntegration(unittest.TestCase):
@@ -28,7 +30,7 @@ class TestLemonadeClientIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test fixtures for the entire test class."""
-        cls.client = LemonadeClient()
+        cls.client = LemonadeClient(minimum_version=LEMONADE_MINIMUM_VERSION)
         cls.server_started = False
         cls.test_model = "Qwen3-0.6B-GGUF"  # Small model for testing
         cls.setup_timeout = 300  # 5 minutes for setup
@@ -281,6 +283,78 @@ class TestLemonadeClientIntegration(unittest.TestCase):
         self.assertIn("model_name", result)
         self.assertIn("current_model", result)
         self.assertEqual(result["model_name"], self.test_model)
+
+    def test_10_get_system_info(self):
+        """Test getting system info from real server."""
+        result = self.loop.run_until_complete(
+            self.run_async(self.client.get_system_info())
+        )
+
+        if result is not None:
+            self.assertIsInstance(result, dict)
+            self.assertIn("OS Version", result)
+            self.assertIn("Physical Memory", result)
+            self.assertIn("devices", result)
+
+            # Verify devices structure
+            devices = result["devices"]
+            self.assertIsInstance(devices, dict)
+
+            # Should have at least CPU info
+            if "cpu" in devices:
+                self.assertIn("available", devices["cpu"])
+        else:
+            self.skipTest("System info API not available")
+
+    def test_11_select_model_for_hardware(self):
+        """Test hardware-based model selection with real system info."""
+        result = self.loop.run_until_complete(
+            self.run_async(self.client.select_model_for_hardware())
+        )
+
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+
+        model_name, size_gb = result
+        self.assertIsInstance(model_name, str)
+        self.assertIsInstance(size_gb, (int, float))
+        self.assertGreater(size_gb, 0)
+
+        # Should be one of the known models from the MODELS dictionary
+        from lemonade_arcade.lemonade_client import MODELS
+
+        known_models = [model_info[0] for model_info in MODELS.values()]
+        self.assertIn(model_name, known_models)
+
+    def test_12_system_info_caching(self):
+        """Test that system info caching works correctly."""
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # First call should fetch from API and cache
+            result1 = self.loop.run_until_complete(
+                self.run_async(self.client.get_system_info(cache_dir=temp_dir))
+            )
+
+            if result1 is not None:
+                # Check that cache file was created
+                cache_file = os.path.join(temp_dir, "system_info.json")
+                self.assertTrue(os.path.exists(cache_file))
+
+                # Second call should use cache - verify by checking API wasn't called again
+                with patch("httpx.AsyncClient") as mock_client:
+                    result2 = self.loop.run_until_complete(
+                        self.run_async(self.client.get_system_info(cache_dir=temp_dir))
+                    )
+
+                    # API should not have been called since we're using cache
+                    mock_client.assert_not_called()
+
+                # Results should be identical
+                self.assertEqual(result1, result2)
+            else:
+                self.skipTest("System info API not available")
 
 
 def run_async_test(coro):
