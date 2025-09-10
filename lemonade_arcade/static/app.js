@@ -457,9 +457,12 @@ class SetupManager {
                 this.checks.model.completed = true;
                 this.updateCheckStatus('model', 'success', `Required model ${status.model_name} is installed`);
             } else {
+                const buttonText = selectedModelInfo.size_display 
+                    ? `Install Model (${selectedModelInfo.size_display})`
+                    : 'Install Model';
                 this.updateCheckStatus('model', 'error', 
                     `Required model ${status.model_name} is not installed`,
-                    true, 'Install Model (18.6 GB)', () => this.installModel());
+                    true, buttonText, () => this.installModel());
                 return; // Stop here, user needs to take action
             }
         } catch (error) {
@@ -1725,9 +1728,49 @@ function startGameStatusCheck() {
     setTimeout(checkStatus, 2000);
 }
 
+// Store selected model info globally
+let selectedModelInfo = {
+    model_name: null,
+    size_gb: null,
+    size_display: null
+};
+
+// Update the selected model name in the UI
+async function updateSelectedModelName() {
+    try {
+        const response = await fetch('/api/selected-model');
+        const data = await response.json();
+        
+        // Update global model info with server response
+        selectedModelInfo = {
+            model_name: data.model_name,
+            size_gb: data.size_gb || null,
+            size_display: data.size_display || null
+        };
+        
+        // Update the model description in the setup screen
+        const descModel = document.getElementById('descModel');
+        if (descModel) {
+            descModel.textContent = `Checking for ${selectedModelInfo.model_name} model...`;
+        }
+        
+        if (selectedModelInfo.size_display) {
+            console.log('Selected model:', selectedModelInfo.model_name, 'Size:', selectedModelInfo.size_display);
+        } else {
+            console.log('Selected model:', selectedModelInfo.model_name, '(size unknown)');
+        }
+    } catch (error) {
+        console.error('Failed to fetch selected model:', error);
+        // Keep the default values if fetch fails
+    }
+}
+
 // Handle Enter key in prompt input
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM Content Loaded - Lemonade Arcade initialized');
+    
+    // Fetch and update the selected model name
+    updateSelectedModelName();
     
     // Check if setup screen exists
     const setupScreen = document.getElementById('setupScreen');

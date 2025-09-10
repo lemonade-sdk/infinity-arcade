@@ -3,11 +3,22 @@ import os
 import subprocess
 import sys
 import tempfile
-from typing import List
+import json
+import re
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import List, Dict, Optional
 import httpx
 
 
 LEMONADE_MINIMUM_VERSION = "8.1.5"
+
+# Model information: (model_name, size_gb)
+MODELS = {
+    "high_end": ("Qwen3-Coder-30B-A3B-Instruct-GGUF", 18.6),
+    "npu": ("Qwen-2.5-7B-Instruct-Hybrid", 8.4),
+    "default": ("Qwen3-4B-Instruct-2507-GGUF", 2.5),
+}
 
 logger = logging.getLogger("lemonade_arcade.main")
 
@@ -918,3 +929,234 @@ class LemonadeClient:
             error_msg = f"Error loading model: {e}"
             logger.error(error_msg)
             return {"success": False, "message": error_msg}
+
+    async def get_system_info(
+        self,
+        cache_dir: Optional[str] = None,
+        cache_duration_hours: Optional[int] = None,
+    ):
+        """
+        Get system information from lemonade-server with caching support.
+
+        Use this to retrieve detailed hardware information including CPU, GPU, NPU, and memory specs.
+        The system-info endpoint is slow, so results are cached by default. Cache never expires
+        unless cache_duration_hours is explicitly set.
+
+        Args:
+            cache_dir: Directory to store cache file (defaults to ~/.lemonade-arcade)
+            cache_duration_hours: Hours to keep cached data (None = never expire, default)
+
+        Returns:
+            dict: System information from server, or None if unavailable
+        """
+        logger.info("Getting system information from lemonade-server...")
+
+        # Set up cache directory and file
+        if cache_dir is None:
+            cache_dir = Path.home() / ".cache" / "lemonade"
+        else:
+            cache_dir = Path(cache_dir)
+
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / "lemonade_system_info_cache.json"
+
+        # Try to load from cache first
+        if cache_file.exists():
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    cache_data = json.load(f)
+
+                # Check if cache is still valid (if expiration is set)
+                if cache_duration_hours is not None:
+                    cache_time = datetime.fromisoformat(cache_data["timestamp"])
+                    expiry_time = cache_time + timedelta(hours=cache_duration_hours)
+
+                    if datetime.now() < expiry_time:
+                        logger.info("Using cached system info (within expiry time)")
+                        return cache_data["system_info"]
+                    else:
+                        logger.info("Cache expired, fetching fresh system info")
+                else:
+                    # Cache never expires
+                    logger.info("Using cached system info (no expiry)")
+                    return cache_data["system_info"]
+
+            except Exception as e:
+                logger.warning(f"Failed to read cache file: {e}")
+
+        # Fetch fresh system info from server
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(f"{self.url}/api/v1/system-info")
+
+                if response.status_code == 200:
+                    system_info = response.json()
+                    logger.info("Successfully retrieved system info from server")
+
+                    # Cache the result
+                    try:
+                        cache_data = {
+                            "timestamp": datetime.now().isoformat(),
+                            "system_info": system_info,
+                        }
+                        with open(cache_file, "w", encoding="utf-8") as f:
+                            json.dump(cache_data, f, indent=2)
+                        logger.info(f"Cached system info to {cache_file}")
+                    except Exception as e:
+                        logger.warning(f"Failed to cache system info: {e}")
+
+                    return system_info
+                else:
+                    logger.warning(
+                        f"System info request failed: HTTP {response.status_code}"
+                    )
+                    return None
+
+        except Exception as e:
+            logger.error(f"Error fetching system info: {e}")
+            return None
+
+    def _parse_memory_size(self, memory_str: str) -> float:
+        """
+        Parse memory size string like '32.0 GB' to numeric value in GB.
+
+        Args:
+            memory_str: Memory string from system info (e.g., "32.0 GB")
+
+        Returns:
+            float: Memory size in GB, or 0.0 if parsing fails
+        """
+        try:
+            # Extract number and unit
+            match = re.match(r"(\d+\.?\d*)\s*(GB|MB|TB)", memory_str.upper())
+            if not match:
+                return 0.0
+
+            value = float(match.group(1))
+            unit = match.group(2)
+
+            # Convert to GB
+            if unit == "MB":
+                return value / 1024
+            elif unit == "TB":
+                return value * 1024
+            else:  # GB
+                return value
+
+        except Exception:
+            return 0.0
+
+    def _check_discrete_gpu_vram(self, devices: Dict) -> bool:
+        """
+        Check if any discrete GPU has 16GB+ VRAM.
+
+        Args:
+            devices: Devices section from system info
+
+        Returns:
+            bool: True if discrete GPU with sufficient VRAM found
+        """
+        try:
+            # Check for NVIDIA discrete GPUs
+            nvidia_dgpus = devices.get("nvidia_dgpu", [])
+            if isinstance(nvidia_dgpus, list):
+                for gpu in nvidia_dgpus:
+                    if gpu.get("available", False):
+                        vram_str = gpu.get("vram", "0 GB")
+                        vram_gb = self._parse_memory_size(vram_str)
+                        if vram_gb >= 16.0:
+                            logger.info(
+                                f"Found NVIDIA discrete GPU with {vram_gb}GB VRAM"
+                            )
+                            return True
+
+            # Check for AMD discrete GPUs
+            amd_dgpus = devices.get("amd_dgpu", [])
+            if isinstance(amd_dgpus, list):
+                for gpu in amd_dgpus:
+                    if gpu.get("available", False):
+                        vram_str = gpu.get("vram", "0 GB")
+                        vram_gb = self._parse_memory_size(vram_str)
+                        if vram_gb >= 16.0:
+                            logger.info(f"Found AMD discrete GPU with {vram_gb}GB VRAM")
+                            return True
+
+        except Exception as e:
+            logger.warning(f"Error checking discrete GPU VRAM: {e}")
+
+        return False
+
+    def _is_npu_available(self, devices: Dict) -> bool:
+        """
+        Check if NPU is available and functional.
+
+        Args:
+            devices: Devices section from system info
+
+        Returns:
+            bool: True if NPU is available
+        """
+        try:
+            npu = devices.get("npu", {})
+            return npu.get("available", False)
+        except Exception:
+            return False
+
+    async def select_model_for_hardware(
+        self, system_info: Optional[Dict] = None, cache_dir: Optional[str] = None
+    ) -> tuple[str, float]:
+        """
+        Select the optimal model based on hardware capabilities.
+
+        Use this to automatically choose the best model for the user's hardware. The selection
+        logic prioritizes larger models for high-end hardware and falls back to smaller models
+        for resource-constrained systems.
+
+        Args:
+            system_info: Pre-fetched system info (if None, will fetch automatically)
+            cache_dir: Directory for caching system info (passed to get_system_info)
+
+        Returns:
+            tuple[str, float]: (model_name, size_gb) based on hardware capabilities
+        """
+        logger.info("Selecting model based on hardware capabilities...")
+
+        # Get system info if not provided
+        if system_info is None:
+            system_info = await self.get_system_info(cache_dir=cache_dir)
+
+        if system_info is None:
+            logger.warning("Could not get system info, using default model")
+            return MODELS["default"]
+
+        try:
+            # Extract hardware information
+            physical_memory_str = system_info.get("Physical Memory", "0 GB")
+            memory_gb = self._parse_memory_size(physical_memory_str)
+            logger.info(f"System RAM: {memory_gb}GB")
+
+            devices = system_info.get("devices", {})
+            has_high_vram_gpu = self._check_discrete_gpu_vram(devices)
+            has_npu = self._is_npu_available(devices)
+
+            logger.info(f"High VRAM GPU available: {has_high_vram_gpu}")
+            logger.info(f"NPU available: {has_npu}")
+
+            # Apply selection logic
+            if memory_gb >= 64.0 or has_high_vram_gpu:
+                selected_model = MODELS["high_end"]
+                logger.info(
+                    f"Selected large model due to sufficient resources (RAM: {memory_gb}GB, High VRAM GPU: {has_high_vram_gpu})"
+                )
+            elif has_npu:
+                selected_model = MODELS["npu"]
+                logger.info("Selected NPU-optimized model due to NPU availability")
+            else:
+                selected_model = MODELS["default"]
+                logger.info("Selected default model for standard hardware")
+
+            return selected_model
+
+        except Exception as e:
+            logger.error(f"Error in model selection logic: {e}")
+            return MODELS["default"]
