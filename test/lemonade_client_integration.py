@@ -339,7 +339,7 @@ class TestLemonadeClientIntegration(unittest.TestCase):
 
             if result1 is not None:
                 # Check that cache file was created
-                cache_file = os.path.join(temp_dir, "system_info.json")
+                cache_file = os.path.join(temp_dir, "lemonade_system_info_cache.json")
                 self.assertTrue(os.path.exists(cache_file))
 
                 # Second call should use cache - verify by checking API wasn't called again

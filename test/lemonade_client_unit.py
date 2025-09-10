@@ -9,6 +9,7 @@ import httpx
 import platform
 import json
 import time
+from datetime import datetime, timedelta
 
 # Add the lemonade_arcade package to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -956,19 +957,39 @@ class TestLemonadeClient(unittest.TestCase):
 
     async def test_get_system_info_cached(self):
         """Test getting system info from cache."""
-        cached_data = {
+        system_info_data = {
             "OS Version": "Linux-Ubuntu-22.04",
             "Physical Memory": "16.0 GB",
             "devices": {"cpu": {"available": True}},
         }
 
-        with patch("os.path.exists", return_value=True), patch(
+        # The actual cache structure includes timestamp and system_info wrapper
+        cached_data = {
+            "timestamp": "2024-01-01T12:00:00",
+            "system_info": system_info_data,
+        }
+
+        with patch(
             "builtins.open", mock_open(read_data=json.dumps(cached_data))
-        ), patch("os.path.getmtime", return_value=time.time()):
+        ), patch(
+            "lemonade_arcade.lemonade_client.datetime"
+        ) as mock_datetime_module, patch(
+            "pathlib.Path.exists", return_value=True
+        ), patch(
+            "pathlib.Path.mkdir"
+        ):
+
+            # Mock datetime objects for cache expiry logic
+            mock_cache_time = datetime(2024, 1, 1, 12, 0, 0)
+            mock_current_time = datetime(2024, 1, 1, 13, 0, 0)  # 1 hour later
+
+            # Mock the datetime.fromisoformat and datetime.now methods
+            mock_datetime_module.fromisoformat.return_value = mock_cache_time
+            mock_datetime_module.now.return_value = mock_current_time
 
             result = await self.client.get_system_info(cache_duration_hours=24)
 
-            self.assertEqual(result, cached_data)
+            self.assertEqual(result, system_info_data)
 
     async def test_get_system_info_api_failure(self):
         """Test getting system info when API fails."""
@@ -996,15 +1017,15 @@ class TestLemonadeClient(unittest.TestCase):
     def test_check_discrete_gpu_vram(self):
         """Test checking discrete GPU VRAM."""
         # Test with NVIDIA GPU having enough VRAM
-        devices_nvidia_good = {"nvidia_dgpu": [{"available": True, "memory_gb": 20.0}]}
+        devices_nvidia_good = {"nvidia_dgpu": [{"available": True, "vram": "20.0 GB"}]}
         self.assertTrue(self.client._check_discrete_gpu_vram(devices_nvidia_good))
 
         # Test with NVIDIA GPU not having enough VRAM
-        devices_nvidia_bad = {"nvidia_dgpu": [{"available": True, "memory_gb": 8.0}]}
+        devices_nvidia_bad = {"nvidia_dgpu": [{"available": True, "vram": "8.0 GB"}]}
         self.assertFalse(self.client._check_discrete_gpu_vram(devices_nvidia_bad))
 
         # Test with AMD GPU having enough VRAM
-        devices_amd_good = {"amd_dgpu": [{"available": True, "memory_gb": 18.0}]}
+        devices_amd_good = {"amd_dgpu": [{"available": True, "vram": "18.0 GB"}]}
         self.assertTrue(self.client._check_discrete_gpu_vram(devices_amd_good))
 
         # Test with no discrete GPU
@@ -1050,7 +1071,7 @@ class TestLemonadeClient(unittest.TestCase):
         system_info = {
             "Physical Memory": "32.0 GB",
             "devices": {
-                "nvidia_dgpu": [{"available": True, "memory_gb": 20.0}],
+                "nvidia_dgpu": [{"available": True, "vram": "20.0 GB"}],
                 "amd_dgpu": [{"available": False}],
                 "npu": {"available": False},
             },
