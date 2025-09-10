@@ -10,7 +10,8 @@ Here's the typical sequence of API calls for setting up a lemonade-server-based 
 ```python
 from lemonade_arcade.lemonade_client import LemonadeClient
 
-client = LemonadeClient()
+# Create client with minimum version requirement
+client = LemonadeClient(minimum_version="8.1.9")
 
 # Check deployment environment
 is_pyinstaller = client.is_pyinstaller_environment()
@@ -77,6 +78,32 @@ if not load_status["loaded"]:
 
 ### 5. Ready for Inference
 Once the above steps complete successfully, your application can make inference requests to `client.url` (default: `http://localhost:8000`) using the OpenAI-compatible API.
+
+---
+
+## Constructor
+
+#### `LemonadeClient(minimum_version: str = "8.1.0")`
+Initialize a new LemonadeClient instance.
+
+**Parameters:**
+- `minimum_version` (str, optional): Minimum required version of lemonade-server. Defaults to "8.1.0". The client will check server compatibility against this version.
+
+**When to use:** Create a client instance at the start of your application. Specify the minimum version your application requires to ensure compatibility.
+
+**Example:**
+```python
+# Use default minimum version (8.1.0)
+client = LemonadeClient()
+
+# Specify custom minimum version
+client = LemonadeClient(minimum_version="8.1.9")
+
+# Version checking will use your specified minimum
+version_info = await client.check_lemonade_server_version()
+print(f"Required: {version_info['required_version']}")  # Shows your minimum_version
+print(f"Compatible: {version_info['compatible']}")      # True if server >= minimum_version
+```
 
 ---
 

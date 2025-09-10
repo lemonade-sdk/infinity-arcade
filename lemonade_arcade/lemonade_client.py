@@ -11,8 +11,6 @@ from typing import List, Dict, Optional
 import httpx
 
 
-LEMONADE_MINIMUM_VERSION = "8.1.9"
-
 # Model information: (model_name, size_gb)
 MODELS = {
     "high_end": ("Qwen3-Coder-30B-A3B-Instruct-GGUF", 18.6),
@@ -30,11 +28,13 @@ class LemonadeClient:
     by automating many common tasks.
     """
 
-    def __init__(self):
+    def __init__(self, minimum_version: str = "8.1.0"):
         # Track which command is used for this server instance
         self.server_command = None
         # Track the server process to avoid starting multiple instances
         self.server_process = None
+        # Store the minimum required version
+        self.minimum_version = minimum_version
 
         self.url = "http://localhost:8000"
 
@@ -391,15 +391,13 @@ class LemonadeClient:
                 "installed": False,
                 "version": None,
                 "compatible": False,
-                "required_version": LEMONADE_MINIMUM_VERSION,
+                "required_version": self.minimum_version,
             }
 
         version_line = result.stdout.strip()
         logger.info(f"Raw version output: '{version_line}'")
 
         # Extract version number (format might be "lemonade-server 8.1.3" or just "8.1.3")
-        import re
-
         version_match = re.search(r"(\d+\.\d+\.\d+)", version_line)
         if version_match:
             version = version_match.group(1)
@@ -407,7 +405,7 @@ class LemonadeClient:
 
             # Check if the version number is allowed
             version_parts = [int(x) for x in version.split(".")]
-            required_parts = [int(x) for x in LEMONADE_MINIMUM_VERSION.split(".")]
+            required_parts = [int(x) for x in self.minimum_version.split(".")]
             is_compatible = version_parts >= required_parts
             logger.info(
                 f"Version parts: {version_parts}, Required: {required_parts}, "
@@ -418,7 +416,7 @@ class LemonadeClient:
                 "installed": True,
                 "version": version,
                 "compatible": is_compatible,
-                "required_version": LEMONADE_MINIMUM_VERSION,
+                "required_version": self.minimum_version,
             }
         else:
             logger.warning(f"Could not extract version from output: '{version_line}'")
@@ -426,7 +424,7 @@ class LemonadeClient:
                 "installed": True,
                 "version": "unknown",
                 "compatible": False,
-                "required_version": LEMONADE_MINIMUM_VERSION,
+                "required_version": self.minimum_version,
             }
 
     async def check_lemonade_server_running(self):

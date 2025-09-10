@@ -9,14 +9,15 @@ import httpx
 import platform
 
 # Add the lemonade_arcade package to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "lemonade_arcade"))
-from lemonade_arcade.lemonade_client import LemonadeClient, LEMONADE_MINIMUM_VERSION
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from lemonade_arcade.lemonade_client import LemonadeClient
+from lemonade_arcade.main import LEMONADE_MINIMUM_VERSION
 
 
 class TestLemonadeClient(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures before each test method."""
-        self.client = LemonadeClient()
+        self.client = LemonadeClient(minimum_version=LEMONADE_MINIMUM_VERSION)
 
     def test_init(self):
         """Test LemonadeClient initialization."""
@@ -24,6 +25,11 @@ class TestLemonadeClient(unittest.TestCase):
         self.assertIsNone(client.server_command)
         self.assertIsNone(client.server_process)
         self.assertEqual(client.url, "http://localhost:8000")
+        self.assertEqual(client.minimum_version, "8.1.0")  # Default value
+
+        # Test with custom minimum version
+        custom_client = LemonadeClient(minimum_version="8.2.0")
+        self.assertEqual(custom_client.minimum_version, "8.2.0")
 
     def test_is_pyinstaller_environment_false(self):
         """Test is_pyinstaller_environment returns False when not in PyInstaller."""
@@ -305,14 +311,19 @@ class TestLemonadeClient(unittest.TestCase):
         """Test checking lemonade server version successfully."""
         with patch.object(self.client, "execute_lemonade_server_command") as mock_exec:
             mock_result = MagicMock()
-            mock_result.stdout = "lemonade-server 8.1.5"
+            # Calculate a compatible version by incrementing the patch version
+            min_parts = LEMONADE_MINIMUM_VERSION.split(".")
+            compatible_version = (
+                f"{min_parts[0]}.{min_parts[1]}.{int(min_parts[2]) + 1}"
+            )
+            mock_result.stdout = f"lemonade-server {compatible_version}"
             mock_exec.return_value = mock_result
 
             result = await self.client.check_lemonade_server_version()
 
             expected = {
                 "installed": True,
-                "version": "8.1.5",
+                "version": compatible_version,
                 "compatible": True,
                 "required_version": LEMONADE_MINIMUM_VERSION,
             }

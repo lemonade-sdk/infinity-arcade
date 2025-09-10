@@ -31,6 +31,9 @@ from lemonade_arcade.game_launcher import GameLauncher
 from lemonade_arcade.game_orchestrator import GameOrchestrator
 from lemonade_arcade.llm_service import LLMService
 
+# Minimum required version of lemonade-server
+LEMONADE_MINIMUM_VERSION = "8.1.9"
+
 
 # Pygame will be imported on-demand to avoid early DLL loading issues
 # pylint: disable=invalid-name
@@ -60,7 +63,9 @@ class ArcadeApp:
 
     def __init__(self) -> None:
         # Initialize basic components first
-        self.lemonade_handle = lc.LemonadeClient()
+        self.lemonade_handle = lc.LemonadeClient(
+            minimum_version=LEMONADE_MINIMUM_VERSION
+        )
         self.arcade_games = ArcadeGames()
         self.game_launcher = GameLauncher()
 
