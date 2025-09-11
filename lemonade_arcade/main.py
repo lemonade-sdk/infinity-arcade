@@ -144,6 +144,10 @@ class ArcadeApp:
 
         @self.app.get("/api/selected-model")
         async def selected_model():
+            # Initialize model selection if not done yet
+            if self.required_model is None:
+                await self.initialize_model_and_services()
+
             response = {"model_name": self.required_model}
             if self.required_model_size is not None:
                 response["size_gb"] = self.required_model_size
@@ -537,15 +541,6 @@ def main():
     # Keep console visible for debugging and control
     print("Starting Lemonade Arcade...")
     print("Press Ctrl+C to quit")
-
-    # Initialize model and services before starting the server
-    print("Initializing model selection and services...")
-    try:
-        asyncio.run(arcade_app.initialize_model_and_services())
-        print(f"Selected model: {arcade_app.required_model}")
-    except Exception as e:
-        print(f"Warning: Failed to initialize model selection: {e}")
-        print("Continuing with default model...")
 
     port = 8080
 

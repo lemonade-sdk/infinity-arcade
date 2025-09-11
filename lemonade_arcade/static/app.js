@@ -431,6 +431,9 @@ class SetupManager {
                 console.log('API connection successful!');
                 this.checks.connection.completed = true;
                 this.updateCheckStatus('connection', 'success', 'Successfully connected to Lemonade Server API');
+                
+                // Now that server is confirmed online, fetch and update the selected model name
+                updateSelectedModelName();
             } else {
                 console.log('API connection failed - server not responding');
                 this.updateCheckStatus('connection', 'error', 
@@ -1772,9 +1775,6 @@ async function updateSelectedModelName() {
 // Handle Enter key in prompt input
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM Content Loaded - Lemonade Arcade initialized');
-    
-    // Fetch and update the selected model name
-    updateSelectedModelName();
     
     // Check if setup screen exists
     const setupScreen = document.getElementById('setupScreen');
