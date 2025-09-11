@@ -1066,7 +1066,7 @@ class LemonadeClient:
                             vram_gb = float(vram_value)
                         else:
                             vram_gb = self._parse_memory_size(str(vram_value))
-                        if vram_gb >= 16.0:
+                        if vram_gb >= 15.9:
                             logger.info(
                                 f"Found NVIDIA discrete GPU with {vram_gb}GB VRAM"
                             )
@@ -1083,7 +1083,7 @@ class LemonadeClient:
                             vram_gb = float(vram_value)
                         else:
                             vram_gb = self._parse_memory_size(str(vram_value))
-                        if vram_gb >= 16.0:
+                        if vram_gb >= 15.9:
                             logger.info(f"Found AMD discrete GPU with {vram_gb}GB VRAM")
                             return True
 
