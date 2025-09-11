@@ -997,8 +997,8 @@ class TestLemonadeClient(unittest.TestCase):
         mock_response.status_code = 500
 
         with patch("httpx.AsyncClient") as mock_client, patch(
-            "os.path.exists", return_value=False
-        ):
+            "pathlib.Path.exists", return_value=False
+        ), patch("pathlib.Path.mkdir"):
 
             mock_client.return_value.__aenter__.return_value.get.return_value = (
                 mock_response
@@ -1017,15 +1017,17 @@ class TestLemonadeClient(unittest.TestCase):
     def test_check_discrete_gpu_vram(self):
         """Test checking discrete GPU VRAM."""
         # Test with NVIDIA GPU having enough VRAM
-        devices_nvidia_good = {"nvidia_dgpu": [{"available": True, "vram": "20.0 GB"}]}
+        devices_nvidia_good = {
+            "nvidia_dgpu": [{"available": True, "vram_gb": "20.0 GB"}]
+        }
         self.assertTrue(self.client._check_discrete_gpu_vram(devices_nvidia_good))
 
         # Test with NVIDIA GPU not having enough VRAM
-        devices_nvidia_bad = {"nvidia_dgpu": [{"available": True, "vram": "8.0 GB"}]}
+        devices_nvidia_bad = {"nvidia_dgpu": [{"available": True, "vram_gb": "8.0 GB"}]}
         self.assertFalse(self.client._check_discrete_gpu_vram(devices_nvidia_bad))
 
         # Test with AMD GPU having enough VRAM
-        devices_amd_good = {"amd_dgpu": [{"available": True, "vram": "18.0 GB"}]}
+        devices_amd_good = {"amd_dgpu": [{"available": True, "vram_gb": "18.0 GB"}]}
         self.assertTrue(self.client._check_discrete_gpu_vram(devices_amd_good))
 
         # Test with no discrete GPU
@@ -1037,9 +1039,25 @@ class TestLemonadeClient(unittest.TestCase):
 
     def test_is_npu_available(self):
         """Test checking NPU availability."""
-        # Test with available NPU
-        devices_with_npu = {"npu": {"available": True, "name": "AMD NPU"}}
+        # Test with available NPU and OGA inference engine
+        devices_with_npu = {
+            "npu": {
+                "available": True,
+                "name": "AMD NPU",
+                "inference_engines": {"oga": {"available": True}},
+            }
+        }
         self.assertTrue(self.client._is_npu_available(devices_with_npu))
+
+        # Test with available NPU but no OGA inference engine
+        devices_npu_no_oga = {
+            "npu": {
+                "available": True,
+                "name": "AMD NPU",
+                "inference_engines": {"oga": {"available": False}},
+            }
+        }
+        self.assertFalse(self.client._is_npu_available(devices_npu_no_oga))
 
         # Test with unavailable NPU
         devices_no_npu = {"npu": {"available": False}}
@@ -1071,7 +1089,7 @@ class TestLemonadeClient(unittest.TestCase):
         system_info = {
             "Physical Memory": "32.0 GB",
             "devices": {
-                "nvidia_dgpu": [{"available": True, "vram": "20.0 GB"}],
+                "nvidia_dgpu": [{"available": True, "vram_gb": "20.0 GB"}],
                 "amd_dgpu": [{"available": False}],
                 "npu": {"available": False},
             },
@@ -1090,7 +1108,11 @@ class TestLemonadeClient(unittest.TestCase):
             "devices": {
                 "nvidia_dgpu": [{"available": False}],
                 "amd_dgpu": [{"available": False}],
-                "npu": {"available": True, "name": "AMD NPU"},
+                "npu": {
+                    "available": True,
+                    "name": "AMD NPU",
+                    "inference_engines": {"oga": {"available": True}},
+                },
             },
         }
 

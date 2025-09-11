@@ -536,7 +536,6 @@ def main():
     # Server mode: start the Lemonade Arcade server
     import webbrowser
     import threading
-    import asyncio
 
     # Keep console visible for debugging and control
     print("Starting Lemonade Arcade...")
