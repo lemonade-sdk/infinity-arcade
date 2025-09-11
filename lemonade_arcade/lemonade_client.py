@@ -1060,8 +1060,12 @@ class LemonadeClient:
             if isinstance(nvidia_dgpus, list):
                 for gpu in nvidia_dgpus:
                     if gpu.get("available", False):
-                        vram_str = gpu.get("vram", "0 GB")
-                        vram_gb = self._parse_memory_size(vram_str)
+                        vram_value = gpu.get("vram_gb", "0")
+                        # Handle both numeric and string values
+                        if isinstance(vram_value, (int, float)):
+                            vram_gb = float(vram_value)
+                        else:
+                            vram_gb = self._parse_memory_size(str(vram_value))
                         if vram_gb >= 16.0:
                             logger.info(
                                 f"Found NVIDIA discrete GPU with {vram_gb}GB VRAM"
@@ -1073,8 +1077,12 @@ class LemonadeClient:
             if isinstance(amd_dgpus, list):
                 for gpu in amd_dgpus:
                     if gpu.get("available", False):
-                        vram_str = gpu.get("vram", "0 GB")
-                        vram_gb = self._parse_memory_size(vram_str)
+                        vram_value = gpu.get("vram_gb", "0")
+                        # Handle both numeric and string values
+                        if isinstance(vram_value, (int, float)):
+                            vram_gb = float(vram_value)
+                        else:
+                            vram_gb = self._parse_memory_size(str(vram_value))
                         if vram_gb >= 16.0:
                             logger.info(f"Found AMD discrete GPU with {vram_gb}GB VRAM")
                             return True
