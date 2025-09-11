@@ -1094,17 +1094,29 @@ class LemonadeClient:
 
     def _is_npu_available(self, devices: Dict) -> bool:
         """
-        Check if NPU is available and functional.
+        Check if NPU is available and functional with OGA inference engine.
 
         Args:
             devices: Devices section from system info
 
         Returns:
-            bool: True if NPU is available
+            bool: True if NPU is available and OGA inference engine is available
         """
         try:
             npu = devices.get("npu", {})
-            return npu.get("available", False)
+            npu_available = npu.get("available", False)
+
+            if not npu_available:
+                return False
+
+            # Also check if OGA (ONNX GenAI) inference engine is available
+            inference_engines = npu.get("inference_engines", {})
+            oga_available = inference_engines.get("oga", {}).get("available", False)
+
+            logger.info(
+                f"NPU hardware available: {npu_available}, OGA inference engine available: {oga_available}"
+            )
+            return npu_available and oga_available
         except Exception:
             return False
 
