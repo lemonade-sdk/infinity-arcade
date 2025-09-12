@@ -23,6 +23,7 @@ ignore=builtin_games
 # C0116: missing-function-docstring
 # C0301: line-too-long
 # R0902: too-many-instance-attributes
+# R1732: Consider using 'with' for resource-allocating operations (consider-using-with)
 
 
-disable=W1203,W0718,C0415,R0913,R1705,R0917,R0912,C0114,R0915,C0302,R0914,R1723,W0702,R1724,C0116,C0301,R0902
+disable=W1203,W0718,C0415,R0913,R1705,R0917,R0912,C0114,R0915,C0302,R0914,R1723,W0702,R1724,C0116,C0301,R0902,R1732

@@ -31,6 +31,9 @@ from lemonade_arcade.game_launcher import GameLauncher
 from lemonade_arcade.game_orchestrator import GameOrchestrator
 from lemonade_arcade.llm_service import LLMService
 
+# Minimum required version of lemonade-server
+LEMONADE_MINIMUM_VERSION = "8.1.10"
+
 
 # Pygame will be imported on-demand to avoid early DLL loading issues
 # pylint: disable=invalid-name
@@ -59,20 +62,18 @@ class ArcadeApp:
     """Encapsulates app state, services, and route registration."""
 
     def __init__(self) -> None:
-        # Determine required model
-        if os.environ.get("LEMONADE_ARCADE_MODEL"):
-            self.required_model = os.environ.get("LEMONADE_ARCADE_MODEL")
-        else:
-            self.required_model = "Qwen3-Coder-30B-A3B-Instruct-GGUF"
-
-        # Core services
-        self.lemonade_handle = lc.LemonadeClient()
+        # Initialize basic components first
+        self.lemonade_handle = lc.LemonadeClient(
+            minimum_version=LEMONADE_MINIMUM_VERSION
+        )
         self.arcade_games = ArcadeGames()
         self.game_launcher = GameLauncher()
-        self.llm_service = LLMService(self.lemonade_handle, self.required_model)
-        self.orchestrator = GameOrchestrator(
-            self.arcade_games, self.game_launcher, self.llm_service
-        )
+
+        # Model will be determined asynchronously
+        self.required_model = None
+        self.required_model_size = None
+        self.llm_service = None
+        self.orchestrator = None
 
         # FastAPI app and resources
         self.app = FastAPI(title="Lemonade Arcade", version="0.1.0")
@@ -86,6 +87,31 @@ class ArcadeApp:
 
         # Register endpoints
         self._register_routes()
+
+    async def initialize_model_and_services(self) -> None:
+        """Initialize model selection and dependent services asynchronously."""
+        # Determine required model
+        if os.environ.get("LEMONADE_ARCADE_MODEL"):
+            self.required_model = os.environ.get("LEMONADE_ARCADE_MODEL")
+            self.required_model_size = None  # Unknown size for custom models
+            logger.info(f"Using model from environment variable: {self.required_model}")
+        else:
+            # Use hardware-based selection with caching in the arcade directory
+            cache_dir = str(self.arcade_games.games_dir.parent)  # ~/.lemonade-arcade
+            self.required_model, self.required_model_size = (
+                await self.lemonade_handle.select_model_for_hardware(
+                    cache_dir=cache_dir
+                )
+            )
+            logger.info(
+                f"Selected model based on hardware: {self.required_model} ({self.required_model_size} GB)"
+            )
+
+        # Initialize services that depend on the model
+        self.llm_service = LLMService(self.lemonade_handle, self.required_model)
+        self.orchestrator = GameOrchestrator(
+            self.arcade_games, self.game_launcher, self.llm_service
+        )
 
     @staticmethod
     def generate_game_id() -> str:
@@ -115,6 +141,18 @@ class ArcadeApp:
         async def server_status():
             online = await self.lemonade_handle.check_lemonade_server_api()
             return JSONResponse({"online": online})
+
+        @self.app.get("/api/selected-model")
+        async def selected_model():
+            # Initialize model selection if not done yet
+            if self.required_model is None:
+                await self.initialize_model_and_services()
+
+            response = {"model_name": self.required_model}
+            if self.required_model_size is not None:
+                response["size_gb"] = self.required_model_size
+                response["size_display"] = f"{self.required_model_size} GB"
+            return JSONResponse(response)
 
         @self.app.get("/api/games")
         async def get_games():

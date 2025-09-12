@@ -431,6 +431,9 @@ class SetupManager {
                 console.log('API connection successful!');
                 this.checks.connection.completed = true;
                 this.updateCheckStatus('connection', 'success', 'Successfully connected to Lemonade Server API');
+                
+                // Now that server is confirmed online, fetch and update the selected model name
+                updateSelectedModelName();
             } else {
                 console.log('API connection failed - server not responding');
                 this.updateCheckStatus('connection', 'error', 
@@ -457,9 +460,12 @@ class SetupManager {
                 this.checks.model.completed = true;
                 this.updateCheckStatus('model', 'success', `Required model ${status.model_name} is installed`);
             } else {
+                const buttonText = selectedModelInfo.size_display 
+                    ? `Install Model (${selectedModelInfo.size_display})`
+                    : 'Install Model';
                 this.updateCheckStatus('model', 'error', 
                     `Required model ${status.model_name} is not installed`,
-                    true, 'Install Model (18.6 GB)', () => this.installModel());
+                    true, buttonText, () => this.installModel());
                 return; // Stop here, user needs to take action
             }
         } catch (error) {
@@ -732,7 +738,8 @@ class SetupManager {
             btn.textContent = 'Installing...';
         }
         
-        this.updateCheckStatus('model', 'pending', 'Installing required model (18.6 GB - this may take several minutes)...');
+        const sizeText = selectedModelInfo.size_display ? ` (${selectedModelInfo.size_display} - this may take several minutes)` : ' (this may take several minutes)';
+        this.updateCheckStatus('model', 'pending', `Installing required model${sizeText}...`);
         
         // Always show built-in games section during download
         this.showBuiltinGamesSection();
@@ -761,9 +768,10 @@ class SetupManager {
                     this.startSetup();
                 }, 2000);
             } else {
+                const retryButtonText = selectedModelInfo.size_display ? `Retry Install (${selectedModelInfo.size_display})` : 'Retry Install';
                 this.updateCheckStatus('model', 'error', 
                     `Model installation failed: ${result.message}`,
-                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+                    true, retryButtonText, () => this.installModel());
                 
                 // Hide built-in games section on error
                 this.hideBuiltinGamesSection();
@@ -771,13 +779,15 @@ class SetupManager {
         } catch (error) {
             console.error('Model installation failed:', error);
             if (error.name === 'AbortError') {
+                const retryButtonText = selectedModelInfo.size_display ? `Retry Install (${selectedModelInfo.size_display})` : 'Retry Install';
                 this.updateCheckStatus('model', 'error', 
                     'Model installation timed out after 30 minutes',
-                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+                    true, retryButtonText, () => this.installModel());
             } else {
+                const retryButtonText = selectedModelInfo.size_display ? `Retry Install (${selectedModelInfo.size_display})` : 'Retry Install';
                 this.updateCheckStatus('model', 'error', 
                     'Model installation failed due to network error',
-                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+                    true, retryButtonText, () => this.installModel());
             }
             
             // Hide built-in games section on error
@@ -1723,6 +1733,43 @@ function startGameStatusCheck() {
     };
     
     setTimeout(checkStatus, 2000);
+}
+
+// Store selected model info globally
+let selectedModelInfo = {
+    model_name: null,
+    size_gb: null,
+    size_display: null
+};
+
+// Update the selected model name in the UI
+async function updateSelectedModelName() {
+    try {
+        const response = await fetch('/api/selected-model');
+        const data = await response.json();
+        
+        // Update global model info with server response
+        selectedModelInfo = {
+            model_name: data.model_name,
+            size_gb: data.size_gb || null,
+            size_display: data.size_display || null
+        };
+        
+        // Update the model description in the setup screen
+        const descModel = document.getElementById('descModel');
+        if (descModel) {
+            descModel.textContent = `Checking for ${selectedModelInfo.model_name} model...`;
+        }
+        
+        if (selectedModelInfo.size_display) {
+            console.log('Selected model:', selectedModelInfo.model_name, 'Size:', selectedModelInfo.size_display);
+        } else {
+            console.log('Selected model:', selectedModelInfo.model_name, '(size unknown)');
+        }
+    } catch (error) {
+        console.error('Failed to fetch selected model:', error);
+        // Keep the default values if fetch fails
+    }
 }
 
 // Handle Enter key in prompt input
