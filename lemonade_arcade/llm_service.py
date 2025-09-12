@@ -1,5 +1,7 @@
 import logging
+import os
 import re
+import tempfile
 from dataclasses import dataclass
 from typing import AsyncGenerator, Optional, Union
 
@@ -147,7 +149,7 @@ Rules:
 7. Make sure the game window closes properly when the user clicks the X button
 8. Use reasonable colors and make the game visually appealing with pygame primitives
 
-Generate ONLY the Python code in a single code block. Do not include any explanations outside the code block."""
+Generate ONLY the Python code wrapped in a markdown code block using triple backticks (```python). Do not include any explanations outside the code block."""
 
         user_prompt = f"Create a game: {content}"
         messages = [
@@ -191,7 +193,7 @@ Output format:
 2. Incorporate the fix into a code snippet in the style of a before/after git diff.
     a. Show the fix and a couple surrounding lines of code.
     b. ONLY 5-10 lines of code.
-3. Complete CORRECTED code in a python code block.
+3. Complete CORRECTED code wrapped in a markdown code block using triple backticks (```python).
 
 IMPORTANT:
 - The final code you output must have the fix applied.
@@ -227,7 +229,9 @@ Rules:
 6. Make sure the game window closes properly when the user clicks the X button
 7. Use reasonable colors and make the game visually appealing with pygame primitives
 
-Generate ONLY the complete modified Python code in a single code block. Do not include any explanations outside the code block."""
+Output format:
+    First, a one-sentence explanation of the modification in the context of the game, starting with a phrase like "I will modify the game to...".
+    Then, generate ONLY the complete modified Python code wrapped in a markdown code block using triple backticks (```python)."""
 
         user_prompt = f"""Here is the existing game code:
 
@@ -286,6 +290,23 @@ Provide the complete modified game code."""
                     content_chunk = delta.content
                     full_response += content_chunk
                     yield content_chunk
+
+        # Save the complete LLM response to a temporary file for debugging
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=f"_llm_response_{mode}.txt",
+                delete=False,
+                encoding="utf-8",
+            ) as temp_file:
+                temp_file.write(full_response)
+                temp_file_path = temp_file.name
+            logger.info(
+                f"DEBUG: Complete LLM response for {mode} mode saved to: {temp_file_path}"
+            )
+            logger.debug(f"Full response length: {len(full_response)} characters")
+        except Exception as e:
+            logger.error(f"Failed to save LLM response to temp file: {e}")
 
         extracted_code = _extract_python_code(full_response)
         if extracted_code:
