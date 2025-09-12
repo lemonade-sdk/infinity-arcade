@@ -505,8 +505,6 @@ class LemonadeClient:
             }
 
         # Give the process a moment to start and check if it's still running
-        import time
-
         time.sleep(1)
 
         # Check if process is still alive
