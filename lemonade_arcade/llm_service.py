@@ -1,5 +1,4 @@
 import logging
-import os
 import re
 import tempfile
 from dataclasses import dataclass
