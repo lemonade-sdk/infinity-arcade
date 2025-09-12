@@ -565,12 +565,19 @@ class TestLemonadeClient(unittest.TestCase):
     @patch("tempfile.mkdtemp")
     @patch("subprocess.Popen")
     @patch("httpx.AsyncClient")
+    @patch("time.sleep")
     @patch.object(LemonadeClient, "reset_server_state")
     @patch.object(LemonadeClient, "is_pyinstaller_environment")
-    async def test_download_and_install_lemonade_server_installer(
-        self, mock_pyinstaller, mock_reset, mock_httpx, mock_popen, mock_mkdtemp
+    async def test_download_and_install_lemonade_server_installer_success(
+        self,
+        mock_pyinstaller,
+        mock_reset,
+        mock_sleep,
+        mock_httpx,
+        mock_popen,
+        mock_mkdtemp,
     ):
-        """Test downloading and installing lemonade server via installer."""
+        """Test downloading and installing lemonade server via installer successfully."""
         mock_pyinstaller.return_value = True
         mock_mkdtemp.return_value = "/tmp/test"
 
@@ -597,7 +604,10 @@ class TestLemonadeClient(unittest.TestCase):
         mock_client_context.__aexit__ = AsyncMock(return_value=None)
         mock_httpx.return_value = mock_client_context
 
+        # Mock process that stays alive (successful launch)
         mock_process = MagicMock()
+        mock_process.poll.return_value = None  # Process is still running
+        mock_process.pid = 12345
         mock_popen.return_value = mock_process
 
         with patch("builtins.open", mock_open()):
@@ -605,7 +615,127 @@ class TestLemonadeClient(unittest.TestCase):
 
         self.assertTrue(result["success"])
         self.assertTrue(result["interactive"])
+        self.assertIn("Installer launched", result["message"])
         mock_reset.assert_called_once()
+        mock_sleep.assert_called_once_with(1)  # Verify 1 second wait
+        mock_process.poll.assert_called_once()  # Verify process status check
+
+    @patch("tempfile.mkdtemp")
+    @patch("subprocess.Popen")
+    @patch("httpx.AsyncClient")
+    @patch("time.sleep")
+    @patch.object(LemonadeClient, "reset_server_state")
+    @patch.object(LemonadeClient, "is_pyinstaller_environment")
+    async def test_download_and_install_lemonade_server_installer_process_dies(
+        self,
+        mock_pyinstaller,
+        mock_reset,
+        mock_sleep,
+        mock_httpx,
+        mock_popen,
+        mock_mkdtemp,
+    ):
+        """Test downloading and installing lemonade server when installer process dies immediately."""
+        mock_pyinstaller.return_value = True
+        mock_mkdtemp.return_value = "/tmp/test"
+
+        # Mock HTTP client and response properly
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        # Mock aiter_bytes as an async generator
+        async def mock_aiter_bytes(chunk_size=8192):
+            yield b"test data"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
+
+        # Mock the stream context manager
+        mock_stream_context = MagicMock()
+        mock_stream_context.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_context.__aexit__ = AsyncMock(return_value=None)
+        mock_client.stream.return_value = mock_stream_context
+
+        # Mock the client context manager
+        mock_client_context = MagicMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
+        mock_httpx.return_value = mock_client_context
+
+        # Mock process that dies immediately (failed launch)
+        mock_process = MagicMock()
+        mock_process.poll.return_value = 1  # Process has died
+        mock_process.returncode = 1
+        mock_popen.return_value = mock_process
+
+        with patch("builtins.open", mock_open()):
+            result = await self.client.download_and_install_lemonade_server()
+
+        self.assertFalse(result["success"])
+        self.assertIn("Failed to launch installer", result["message"])
+        self.assertIn("github_link", result)
+        self.assertIn("Lemonade_Server_Installer.exe", result["github_link"])
+        mock_reset.assert_called_once()
+        mock_sleep.assert_called_once_with(1)  # Verify 1 second wait
+        mock_process.poll.assert_called_once()  # Verify process status check
+
+    @patch("tempfile.mkdtemp")
+    @patch("subprocess.Popen")
+    @patch("httpx.AsyncClient")
+    @patch("time.sleep")
+    @patch.object(LemonadeClient, "reset_server_state")
+    @patch.object(LemonadeClient, "is_pyinstaller_environment")
+    async def test_download_and_install_lemonade_server_installer_launch_exception(
+        self,
+        mock_pyinstaller,
+        mock_reset,
+        mock_sleep,
+        mock_httpx,
+        mock_popen,
+        mock_mkdtemp,
+    ):
+        """Test downloading and installing lemonade server when installer launch raises exception."""
+        mock_pyinstaller.return_value = True
+        mock_mkdtemp.return_value = "/tmp/test"
+
+        # Mock HTTP client and response properly
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        # Mock aiter_bytes as an async generator
+        async def mock_aiter_bytes(chunk_size=8192):
+            yield b"test data"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
+
+        # Mock the stream context manager
+        mock_stream_context = MagicMock()
+        mock_stream_context.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_context.__aexit__ = AsyncMock(return_value=None)
+        mock_client.stream.return_value = mock_stream_context
+
+        # Mock the client context manager
+        mock_client_context = MagicMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
+        mock_httpx.return_value = mock_client_context
+
+        # Mock Popen to raise an exception (e.g., permission denied, antivirus blocking)
+        mock_popen.side_effect = OSError("Permission denied")
+
+        with patch("builtins.open", mock_open()):
+            result = await self.client.download_and_install_lemonade_server()
+
+        self.assertFalse(result["success"])
+        self.assertIn(
+            "Failed to launch installer: Permission denied", result["message"]
+        )
+        self.assertIn("github_link", result)
+        self.assertIn("Lemonade_Server_Installer.exe", result["github_link"])
+        mock_reset.assert_called_once()
+        # time.sleep should not be called if Popen raises exception
+        mock_sleep.assert_not_called()
 
     async def test_check_lemonade_server_api_success(self):
         """Test checking lemonade server API successfully."""
