@@ -10,7 +10,8 @@ Here's the typical sequence of API calls for setting up a lemonade-server-based 
 ```python
 from lemonade_arcade.lemonade_client import LemonadeClient
 
-client = LemonadeClient()
+# Create client with minimum version requirement
+client = LemonadeClient(minimum_version="8.1.9")
 
 # Check deployment environment
 is_pyinstaller = client.is_pyinstaller_environment()
@@ -45,24 +46,64 @@ api_online = await client.check_lemonade_server_api()
 ```
 
 ### 4. Model Management
-```python
-required_model = "Qwen3-0.6B-GGUF"
 
+**Option A: Automatic Hardware-Based Selection**
+```python
+# Select optimal model based on hardware (optional)
+model_name, size_gb = await client.select_model_for_hardware()
+print(f"Selected model: {model_name} ({size_gb} GB)")
+```
+
+**Option B: Manual Model Selection**
+```python
+# Or specify your own model directly
+model_name = "Qwen3-4B-Instruct-2507-GGUF"  # Your choice
+print(f"Using custom model: {model_name}")
+```
+
+**Common Steps (regardless of selection method):**
+```python
 # Check if model is installed
-model_status = await client.check_model_installed(required_model)
+model_status = await client.check_model_installed(model_name)
 if not model_status["installed"]:
     # Install the model
-    install_result = await client.install_model(required_model)
+    install_result = await client.install_model(model_name)
 
 # Check if model is loaded
-load_status = await client.check_model_loaded(required_model)
+load_status = await client.check_model_loaded(model_name)
 if not load_status["loaded"]:
     # Load the model
-    load_result = await client.load_model(required_model)
+    load_result = await client.load_model(model_name)
 ```
 
 ### 5. Ready for Inference
 Once the above steps complete successfully, your application can make inference requests to `client.url` (default: `http://localhost:8000`) using the OpenAI-compatible API.
+
+---
+
+## Constructor
+
+#### `LemonadeClient(minimum_version: str = "8.1.0")`
+Initialize a new LemonadeClient instance.
+
+**Parameters:**
+- `minimum_version` (str, optional): Minimum required version of lemonade-server. Defaults to "8.1.0". The client will check server compatibility against this version.
+
+**When to use:** Create a client instance at the start of your application. Specify the minimum version your application requires to ensure compatibility.
+
+**Example:**
+```python
+# Use default minimum version (8.1.0)
+client = LemonadeClient()
+
+# Specify custom minimum version
+client = LemonadeClient(minimum_version="8.1.9")
+
+# Version checking will use your specified minimum
+version_info = await client.check_lemonade_server_version()
+print(f"Required: {version_info['required_version']}")  # Shows your minimum_version
+print(f"Compatible: {version_info['compatible']}")      # True if server >= minimum_version
+```
 
 ---
 
@@ -432,6 +473,72 @@ if result["success"]:
     # Can now make API calls to client.url
 else:
     print(f"Loading failed: {result['message']}")
+```
+
+---
+
+### Hardware-Based Model Selection
+
+#### `get_system_info(cache_dir=None, cache_duration_hours=None)`
+Get system information from lemonade-server with caching support.
+
+**When to use:** Retrieve detailed hardware information including CPU, GPU, NPU, and memory specs. The system-info endpoint is slow, so results are cached by default. Cache never expires unless cache_duration_hours is explicitly set.
+
+**Parameters:**
+- `cache_dir: Optional[str]` - Directory to store cache file (defaults to ~/.cache/lemonade)
+- `cache_duration_hours: Optional[int]` - Hours to keep cached data (None = never expire, default)
+
+**Returns:** `dict` - System information from server, or None if unavailable
+
+**Example:**
+```python
+# Get system info with default caching (never expires)
+system_info = await client.get_system_info()
+if system_info:
+    print(f"RAM: {system_info['Physical Memory']}")
+    print(f"CPU: {system_info['Processor']}")
+
+# Get system info with 24-hour cache expiry
+system_info = await client.get_system_info(cache_duration_hours=24)
+
+# Use custom cache directory
+system_info = await client.get_system_info(cache_dir="/path/to/cache")
+```
+
+---
+
+#### `select_model_for_hardware(system_info=None, cache_dir=None)` *(Optional)*
+Select the optimal model based on hardware capabilities.
+
+**When to use:** This method is **optional** - use it when you want automatic hardware-based model selection. The selection logic prioritizes larger models for high-end hardware and falls back to smaller models for resource-constrained systems. Developers can skip this method entirely and specify their own model names directly in other LemonadeClient methods.
+
+**Selection Logic:**
+- **64GB+ RAM or discrete GPU with 16GB+ VRAM**: `Qwen3-Coder-30B-A3B-Instruct-GGUF`
+- **AMD NPU available**: `Qwen-2.5-7B-Instruct-Hybrid`
+- **Default/fallback**: `Qwen3-4B-Instruct-2507-GGUF`
+
+**Parameters:**
+- `system_info: Optional[Dict]` - Pre-fetched system info (if None, will fetch automatically)
+- `cache_dir: Optional[str]` - Directory for caching system info (passed to get_system_info)
+
+**Returns:** `tuple[str, float]` - (model_name, size_gb) based on hardware capabilities
+
+**Example:**
+```python
+# Automatic model selection (optional)
+model_name, size_gb = await client.select_model_for_hardware()
+print(f"Recommended model: {model_name} ({size_gb} GB)")
+
+# Use pre-fetched system info
+system_info = await client.get_system_info()
+model_name, size_gb = await client.select_model_for_hardware(system_info=system_info)
+
+# Use custom cache directory
+model_name, size_gb = await client.select_model_for_hardware(cache_dir="/path/to/cache")
+
+# Alternative: Skip hardware detection and use your own model
+model_name = "My-Custom-Model"
+# Then proceed with check_model_installed(), install_model(), etc.
 ```
 
 ---
