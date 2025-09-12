@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import json
 import re
 from datetime import datetime, timedelta
@@ -664,14 +665,41 @@ class LemonadeClient:
 
             # Start the installer but don't wait for it to complete
             # This allows the user to see the installation UI
-            # pylint: disable=consider-using-with
-            subprocess.Popen(install_cmd)
+            try:
+                process = subprocess.Popen(install_cmd)
 
-            return {
-                "success": True,
-                "message": "Installer launched. Please complete the installation and then restart Lemonade Arcade.",
-                "interactive": True,
-            }
+                # Wait a moment to see if the process stays alive
+                time.sleep(1)
+
+                # Check if the process is still running
+                if process.poll() is None:
+                    # Process is still running, installer likely opened successfully
+                    logger.info(
+                        f"Installer launched successfully with PID: {process.pid}"
+                    )
+                    return {
+                        "success": True,
+                        "message": "Installer launched. Please complete the installation and then restart Lemonade Arcade.",
+                        "interactive": True,
+                    }
+                else:
+                    # Process died immediately
+                    logger.error(
+                        f"Installer process died immediately with return code: {process.returncode}"
+                    )
+                    return {
+                        "success": False,
+                        "message": "Failed to launch installer. Please download and install manually from: https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe",
+                        "github_link": "https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe",
+                    }
+
+            except Exception as launch_error:
+                logger.error(f"Failed to launch installer: {launch_error}")
+                return {
+                    "success": False,
+                    "message": f"Failed to launch installer: {launch_error}. Please download and install manually from: https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe",
+                    "github_link": "https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe",
+                }
 
         except Exception as e:
             logger.error(f"Failed to download/install lemonade-server: {e}")
