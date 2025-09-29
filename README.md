@@ -1,5 +1,5 @@
 
-<pre align="center" style="color: #39FF14;">
+<pre align="center">
 ██╗███╗   ██╗███████╗██╗███╗   ██╗██╗████████╗██╗   ██╗
 ██║████╗  ██║██╔════╝██║████╗  ██║██║╚══██╔══╝╚██╗ ██╔╝
 ██║██╔██╗ ██║█████╗  ██║██╔██╗ ██║██║   ██║    ╚████╔╝ 
@@ -34,50 +34,35 @@
     <img src="https://img.shields.io/badge/Star%20History-View-brightgreen" alt="Star History Chart" /></a>
 </p>
 
-Use your overpowered GPU to run AI that produces creative retro-style games! Enter your prompt and the playable game pops open in minutes.
+Create playable retro-style games with LLMs in minutes! Enter your prompt and your game pops open, it's that simple.
 
 Push your imagination to the limit, it's 100% free and local.
+
+![Infinity Arcade GIF](https://github.com/lemonade-sdk/assets/blob/main/arcade/infinity-arcade-demo.gif?raw=true)
 
 
 ## Hardware Requirement
 
-Infinity Arcade uses a 30 billion parameter LLM to generate games, which requires certain hardware specs to run well.
+Infinity Arcade will detect the hardware you have available and load a recommended LLM.
 
-| Configuration | GPU/APU | Memory | Disk Space |
-|---------------|---------|---------|---------|
-| **Minimum (CPU)** | Ryzen AI 7000-series chip or newer | 32 GB RAM | 20 GB |
-| **Suggested (dGPU)** | Radeon 7800XT or newer | 16 GB VRAM | 20 GB |
-| **Suggested (APU)** | Strix Halo (Ryzen AI MAX 395) | 64 GB unified memory | 20 GB |
+| Configuration | GPU/APU | Memory | Disk Space | LLM |
+|---------------|---------|---------|---------|---------|
+| **Minimum (CPU)** | Ryzen AI 7000-series chip or newer | 32 GB RAM | 3 GB | Qwen3-4B-Instruct |
+| **Suggested (NPU)** | Ryzen AI 300-series chip or newer | 32 GB RAM | 10 GB | Qwen-2.5-7B-Instruct-Hybrid |
+| **Suggested (dGPU)** | Radeon 7800XT or newer | 16 GB VRAM | 20 GB | Qwen3-Coder-30B |
+| **Suggested (APU)** | Strix Halo (Ryzen AI MAX 395) | 64 GB unified memory | 20 GB | Qwen3-Coder-30B |
 
 ## Quick Start
 
 
 <p align="center">Windows: click this:</p>
 <p align="center">
-   <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/InfinityArcade.exe"><img src=https://github.com/lemonade-sdk/assets/blob/main/arcade/exe_icon.png?raw=true alt="Arcade Quick Start"/></a>
+   <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/InfinityArcade.exe"><img src=img/icon.ico?raw=true alt="Arcade Quick Start"/></a>
 </p>
 
 <p align="center">
    Linux: click <a href="#linux-and-windows-devs">this</a>
 </p>
-
-## Demo
-
-> [!TIP]
-> Generate creative new retro-style games in minutes, based on prompts like `Make space invaders, but I can fly around the whole screen instead of being stuck on the bottom.`
-
-![Infinity Arcade GIF](https://github.com/lemonade-sdk/assets/blob/main/arcade/space_invaders_x.gif?raw=true)
-
-> [!TIP]
-> Right click any game you've generated to get the Python source code or the prompt, so you can edit and remix further!
-
-
-<img src="https://github.com/lemonade-sdk/assets/blob/main/arcade/home2.png?raw=true" alt="Infinity Arcade UI" width="75%">
-
-> [!TIP]
-> Everything you need to run an LLM on your GPU is automatically set up for you.
-
-<img src="https://github.com/lemonade-sdk/assets/blob/main/arcade/setup.png?raw=true" alt="Infinity Arcade setup" width="50%">
 
 ## Overview
 
