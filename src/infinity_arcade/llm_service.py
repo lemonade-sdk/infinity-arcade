@@ -7,10 +7,10 @@ from typing import AsyncGenerator, Optional, Union
 import httpx
 from openai import AsyncOpenAI
 
-from lemonade_arcade.lemonade_client import LemonadeClient
+from infinity_arcade.lemonade_client import LemonadeClient
 
 
-logger = logging.getLogger("lemonade_arcade.main")
+logger = logging.getLogger("infinity_arcade.main")
 
 
 @dataclass

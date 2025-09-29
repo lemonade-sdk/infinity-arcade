@@ -19,7 +19,7 @@ MODELS = {
     "default": ("Qwen3-4B-Instruct-2507-GGUF", 2.5),
 }
 
-logger = logging.getLogger("lemonade_arcade.main")
+logger = logging.getLogger("infinity_arcade.main")
 
 
 class LemonadeClient:
@@ -677,7 +677,7 @@ class LemonadeClient:
                     )
                     return {
                         "success": True,
-                        "message": "Installer launched. Please complete the installation and then restart Lemonade Arcade.",
+                        "message": "Installer launched. Please complete the installation and then restart Infinity Arcade.",
                         "interactive": True,
                     }
                 else:
@@ -801,12 +801,9 @@ class LemonadeClient:
         Returns:
             dict: Contains 'installed' (bool) and 'model_name' (str) keys
         """
-        logger.info(f"Checking for required model: {model}")
-
         try:
             models = await self.get_available_models()
             is_installed = model in models
-            logger.info(f"Required model installed: {is_installed}")
             return {"installed": is_installed, "model_name": model}
         except Exception as e:
             logger.error(f"Error checking required model: {e}")
@@ -967,7 +964,7 @@ class LemonadeClient:
         unless cache_duration_hours is explicitly set.
 
         Args:
-            cache_dir: Directory to store cache file (defaults to ~/.lemonade-arcade)
+            cache_dir: Directory to store cache file (defaults to ~/.infinity-arcade)
             cache_duration_hours: Hours to keep cached data (None = never expire, default)
 
         Returns:

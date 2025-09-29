@@ -1,4 +1,4 @@
-name: Build Lemonade Arcade Executable
+name: Build Infinity Arcade Executable
 
 on:
   push:
@@ -48,18 +48,18 @@ jobs:
       
     - name: Build executable with PyInstaller
       run: |
-        python -m PyInstaller lemonade_arcade.spec
+        python -m PyInstaller infinity_arcade.spec
       shell: pwsh
       
     - name: Verify build outputs
       run: |
-        if (-not (Test-Path "dist\LemonadeArcade.exe")) {
+        if (-not (Test-Path "dist\InfinityArcade.exe")) {
           Write-Error "Executable not found"
           exit 1
         }
         
         # Show file information
-        $exe = Get-Item "dist\LemonadeArcade.exe"
+        $exe = Get-Item "dist\InfinityArcade.exe"
         
         Write-Host "Build artifact:"
         Write-Host "  - Executable: $($exe.Name) ($([math]::Round($exe.Length / 1MB, 2)) MB)"
@@ -69,8 +69,8 @@ jobs:
     - name: Upload executable artifact
       uses: actions/upload-artifact@v4
       with:
-        name: lemonade-arcade-exe
-        path: dist/LemonadeArcade.exe
+        name: infinity-arcade-exe
+        path: dist/InfinityArcade.exe
         retention-days: 30
         
     - name: Upload to release (if release)
@@ -80,6 +80,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: dist/LemonadeArcade.exe
-        asset_name: LemonadeArcade.exe
+        asset_path: dist/InfinityArcade.exe
+        asset_name: InfinityArcade.exe
         asset_content_type: application/octet-stream

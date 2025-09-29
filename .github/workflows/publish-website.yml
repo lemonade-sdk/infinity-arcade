@@ -9,7 +9,7 @@ on:
 
 jobs:
     build-n-publish-website:
-      name: Build and publish lemonade-arcade.com website
+      name: Build and publish infinity-arcade.com website
       runs-on: ubuntu-latest
       steps:
         - uses: actions/checkout@main

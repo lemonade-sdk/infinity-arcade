@@ -8,7 +8,7 @@ Here's the typical sequence of API calls for setting up a lemonade-server-based 
 
 ### 1. Initial Setup and Environment Check
 ```python
-from lemonade_arcade.lemonade_client import LemonadeClient
+from infinity_arcade.lemonade_client import LemonadeClient
 
 # Create client with minimum version requirement
 client = LemonadeClient(minimum_version="8.1.9")

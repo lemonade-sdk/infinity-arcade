@@ -1,4 +1,4 @@
-"""Lemonade Arcade - AI-powered game generator and arcade."""
+"""Infinity Arcade - AI-powered game generator and arcade."""
 
 from .version import __version__
 

@@ -1,5 +1,5 @@
 
-![Lemonade Arcade Banner](./img/banner.png)
+![Infinity Arcade Banner](./img/banner.png)
 
 <p align="center">
   <a href="https://discord.gg/5xXzkMu8Zk">
@@ -35,7 +35,7 @@ Push your imagination to the limit, it's 100% free and local.
 
 ## Hardware Requirement
 
-Lemonade Arcade uses a 30 billion parameter LLM to generate games, which requires certain hardware specs to run well.
+Infinity Arcade uses a 30 billion parameter LLM to generate games, which requires certain hardware specs to run well.
 
 | Configuration | GPU/APU | Memory | Disk Space |
 |---------------|---------|---------|---------|
@@ -48,7 +48,7 @@ Lemonade Arcade uses a 30 billion parameter LLM to generate games, which require
 
 <p align="center">Windows: click this:</p>
 <p align="center">
-   <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/LemonadeArcade.exe"><img src=https://github.com/lemonade-sdk/assets/blob/main/arcade/exe_icon.png?raw=true alt="Arcade Quick Start"/></a>
+   <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/InfinityArcade.exe"><img src=https://github.com/lemonade-sdk/assets/blob/main/arcade/exe_icon.png?raw=true alt="Arcade Quick Start"/></a>
 </p>
 
 <p align="center">
@@ -60,22 +60,22 @@ Lemonade Arcade uses a 30 billion parameter LLM to generate games, which require
 > [!TIP]
 > Generate creative new retro-style games in minutes, based on prompts like `Make space invaders, but I can fly around the whole screen instead of being stuck on the bottom.`
 
-![Lemonade Arcade GIF](https://github.com/lemonade-sdk/assets/blob/main/arcade/space_invaders_x.gif?raw=true)
+![Infinity Arcade GIF](https://github.com/lemonade-sdk/assets/blob/main/arcade/space_invaders_x.gif?raw=true)
 
 > [!TIP]
 > Right click any game you've generated to get the Python source code or the prompt, so you can edit and remix further!
 
 
-<img src="https://github.com/lemonade-sdk/assets/blob/main/arcade/home2.png?raw=true" alt="Lemonade Arcade UI" width="75%">
+<img src="https://github.com/lemonade-sdk/assets/blob/main/arcade/home2.png?raw=true" alt="Infinity Arcade UI" width="75%">
 
 > [!TIP]
 > Everything you need to run an LLM on your GPU is automatically set up for you.
 
-<img src="https://github.com/lemonade-sdk/assets/blob/main/arcade/setup.png?raw=true" alt="Lemonade Arcade setup" width="50%">
+<img src="https://github.com/lemonade-sdk/assets/blob/main/arcade/setup.png?raw=true" alt="Infinity Arcade setup" width="50%">
 
 ## Overview
 
-Lemonade Arcade combines the convenience of a ChatGPT-like interface with the concept of a game emulator. Instead of emulating existing games, it uses LLMs (served by [Lemonade](https://github.com/lemonade-sdk/lemonade)) to generate completely new games based on your prompts, then lets you play them instantly.
+Infinity Arcade combines the convenience of a ChatGPT-like interface with the concept of a game emulator. Instead of emulating existing games, it uses LLMs (served by [Lemonade](https://github.com/lemonade-sdk/lemonade)) to generate completely new games based on your prompts, then lets you play them instantly.
 
 ## Features
 
@@ -95,8 +95,8 @@ Navigate to the [Releases page](https://github.com/lemonade-sdk/lemonade-arcade/
 From PyPI (recommended):
 
 ```bash
-pip install lemonade-arcade
-lemonade-arcade
+pip install infinity-arcade
+infinity-arcade
 ```
 
 From Source:
@@ -114,7 +114,7 @@ From Source:
 
 3. Run it:
    ```bash
-   lemonade-arcade
+   infinity-arcade
    ```
 
 ## Architecture
@@ -132,10 +132,10 @@ Games are generated with the following constraints:
 
 ### Game Cache
 
-Games are cached under the `.lemonade-arcade` folder in your home directory.
+Games are cached under the `.infinity-arcade` folder in your home directory.
 
 ```
-~/.lemonade-arcade/
+~/.infinity-arcade/
 └── games/
     ├── metadata.json    # Game titles and descriptions
     ├── abc12345.py      # Generated game files
@@ -156,7 +156,7 @@ Games are cached under the `.lemonade-arcade` folder in your home directory.
 ### Generation Failures
 - Try a simpler game concept.
 - Make sure your selected model supports code generation.
-- Check the `lemonade-arcade` and Lemonade Server logs for errors.
+- Check the `infinity-arcade` and Lemonade Server logs for errors.
 
 ## Examples
 

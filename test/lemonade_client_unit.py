@@ -11,10 +11,10 @@ import json
 import time
 from datetime import datetime, timedelta
 
-# Add the lemonade_arcade package to the path
+# Add the infinity_arcade package to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from lemonade_arcade.lemonade_client import LemonadeClient
-from lemonade_arcade.main import LEMONADE_MINIMUM_VERSION
+from infinity_arcade.lemonade_client import LemonadeClient
+from infinity_arcade.main import LEMONADE_MINIMUM_VERSION
 
 
 class TestLemonadeClient(unittest.TestCase):
@@ -1102,7 +1102,7 @@ class TestLemonadeClient(unittest.TestCase):
         with patch(
             "builtins.open", mock_open(read_data=json.dumps(cached_data))
         ), patch(
-            "lemonade_arcade.lemonade_client.datetime"
+            "infinity_arcade.lemonade_client.datetime"
         ) as mock_datetime_module, patch(
             "pathlib.Path.exists", return_value=True
         ), patch(

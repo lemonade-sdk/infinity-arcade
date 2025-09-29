@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Rainbow Space Invaders - Space invaders with rainbow colors
-Built-in game for Lemonade Arcade
+Built-in game for Infinity Arcade
 """
 
 import pygame

@@ -1,5 +1,5 @@
 """
-Command-line interface for Lemonade Arcade
+Command-line interface for Infinity Arcade
 """
 
 import argparse
@@ -8,9 +8,9 @@ import sys
 
 
 def main():
-    """Main entry point for the lemonade-arcade command."""
+    """Main entry point for the infinity-arcade command."""
     parser = argparse.ArgumentParser(
-        description="Lemonade Arcade - AI-powered game creation"
+        description="Infinity Arcade - AI-powered game creation"
     )
     parser.add_argument(
         "--log-level",
@@ -32,7 +32,7 @@ def main():
     )
 
     # Set our specific logger to the requested level
-    logger = logging.getLogger("lemonade_arcade.main")
+    logger = logging.getLogger("infinity_arcade.main")
     logger.setLevel(log_level)
 
     # Also set uvicorn to INFO level to reduce noise
