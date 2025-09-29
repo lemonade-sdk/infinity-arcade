@@ -10,9 +10,9 @@ import tempfile
 import signal
 from pathlib import Path
 
-# Add the infinity_arcade package to the path
+# Add the src directory to the path for module imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from infinity_arcade.lemonade_client import LemonadeClient
+from lemonade_client import LemonadeClient
 from infinity_arcade.main import LEMONADE_MINIMUM_VERSION
 
 
@@ -321,7 +321,7 @@ class TestLemonadeClientIntegration(unittest.TestCase):
         self.assertGreater(size_gb, 0)
 
         # Should be one of the known models from the MODELS dictionary
-        from infinity_arcade.lemonade_client import MODELS
+        from lemonade_client.lemonade_client import MODELS
 
         known_models = [model_info[0] for model_info in MODELS.values()]
         self.assertIn(model_name, known_models)

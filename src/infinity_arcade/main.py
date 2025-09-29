@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
 
-import infinity_arcade.lemonade_client as lc
+import lemonade_client as lc
 from infinity_arcade.arcade_games import ArcadeGames
 from infinity_arcade.utils import get_resource_path
 from infinity_arcade.game_launcher import GameLauncher

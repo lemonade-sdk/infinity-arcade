@@ -11,7 +11,7 @@ setup(
     description="AI-powered game generator and arcade using Lemonade Server",
     author="Lemonade SDK",
     author_email="lemonade@amd.com",
-    packages=["infinity_arcade", "infinity_arcade.builtin_games"],
+    packages=["infinity_arcade", "infinity_arcade.builtin_games", "lemonade_client"],
     package_dir={"": "src"},
     install_requires=[
         "fastapi>=0.104.0",
