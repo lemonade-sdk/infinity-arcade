@@ -123,10 +123,10 @@
                             <div class="check-icon" id="iconModel">[...]</div>
                             <div class="check-content">
                                 <div class="check-title">Required Model</div>
-                                <div class="check-description" id="descModel">Checking for Qwen3-Coder-30B-A3B-Instruct-GGUF model...</div>
+                                <div class="check-description" id="descModel">Checking for required model...</div>
                             </div>
                             <div class="check-action">
-                                <button class="action-btn" id="btnModel" style="display: none;">Install Model (18.6 GB)</button>
+                                <button class="action-btn" id="btnModel" style="display: none;">Install Model</button>
                             </div>
                         </li>
                         
@@ -183,14 +183,26 @@
         </div>
         
         <div class="input-area" id="inputArea" style="display: none;">
-            <input type="text" class="prompt-input" id="promptInput" 
-                   placeholder="Describe the game you want to create (e.g., 'snake but the food moves')" />
-            <button class="create-btn" id="createBtn" onclick="createGame()">Create Game</button>
+            <!-- Remix Mode Game Title Box -->
+            <div class="remix-game-title" id="remixGameTitle" style="display: none;">
+                <span class="remix-title-text" id="remixTitleText">Game Title</span>
+                <button class="remix-exit-btn" id="remixExitBtn" onclick="exitRemixMode()">&times;</button>
+            </div>
+            
+            <div class="input-controls">
+                <input type="text" class="prompt-input" id="promptInput" 
+                       placeholder="Describe the game you want to create (e.g., 'snake but the food moves')" />
+                <button class="create-btn" id="createBtn" onclick="createGame()">Create Game</button>
+            </div>
         </div>
     </div>
     
     <!-- Context Menu -->
     <div id="contextMenu" class="context-menu">
+        <button class="context-menu-item" id="remixGame">
+            🎨 Remix Game
+        </button>
+        <div class="context-menu-separator"></div>
         <button class="context-menu-item" id="openFile">
             📄 Open Python File
         </button>

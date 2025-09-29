@@ -7,6 +7,24 @@ let isServerKnownOnline = false;
 let setupInProgress = false;
 let setupComplete = false;
 
+// Remix mode state
+let isRemixMode = false;
+let remixGameId = null;
+
+// Track games that have been played before (stored in localStorage)
+function hasGameBeenPlayed(gameId) {
+    const playedGames = JSON.parse(localStorage.getItem('playedGames') || '[]');
+    return playedGames.includes(gameId);
+}
+
+function markGameAsPlayed(gameId) {
+    const playedGames = JSON.parse(localStorage.getItem('playedGames') || '[]');
+    if (!playedGames.includes(gameId)) {
+        playedGames.push(gameId);
+        localStorage.setItem('playedGames', JSON.stringify(playedGames));
+    }
+}
+
 // New User Experience - Checklist Setup
 class SetupManager {
     constructor() {
@@ -413,6 +431,9 @@ class SetupManager {
                 console.log('API connection successful!');
                 this.checks.connection.completed = true;
                 this.updateCheckStatus('connection', 'success', 'Successfully connected to Lemonade Server API');
+                
+                // Now that server is confirmed online, fetch and update the selected model name
+                updateSelectedModelName();
             } else {
                 console.log('API connection failed - server not responding');
                 this.updateCheckStatus('connection', 'error', 
@@ -439,9 +460,12 @@ class SetupManager {
                 this.checks.model.completed = true;
                 this.updateCheckStatus('model', 'success', `Required model ${status.model_name} is installed`);
             } else {
+                const buttonText = selectedModelInfo.size_display 
+                    ? `Install Model (${selectedModelInfo.size_display})`
+                    : 'Install Model';
                 this.updateCheckStatus('model', 'error', 
                     `Required model ${status.model_name} is not installed`,
-                    true, 'Install Model (18.6 GB)', () => this.installModel());
+                    true, buttonText, () => this.installModel());
                 return; // Stop here, user needs to take action
             }
         } catch (error) {
@@ -714,7 +738,8 @@ class SetupManager {
             btn.textContent = 'Installing...';
         }
         
-        this.updateCheckStatus('model', 'pending', 'Installing required model (18.6 GB - this may take several minutes)...');
+        const sizeText = selectedModelInfo.size_display ? ` (${selectedModelInfo.size_display} - this may take several minutes)` : ' (this may take several minutes)';
+        this.updateCheckStatus('model', 'pending', `Installing required model${sizeText}...`);
         
         // Always show built-in games section during download
         this.showBuiltinGamesSection();
@@ -743,9 +768,10 @@ class SetupManager {
                     this.startSetup();
                 }, 2000);
             } else {
+                const retryButtonText = selectedModelInfo.size_display ? `Retry Install (${selectedModelInfo.size_display})` : 'Retry Install';
                 this.updateCheckStatus('model', 'error', 
                     `Model installation failed: ${result.message}`,
-                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+                    true, retryButtonText, () => this.installModel());
                 
                 // Hide built-in games section on error
                 this.hideBuiltinGamesSection();
@@ -753,13 +779,15 @@ class SetupManager {
         } catch (error) {
             console.error('Model installation failed:', error);
             if (error.name === 'AbortError') {
+                const retryButtonText = selectedModelInfo.size_display ? `Retry Install (${selectedModelInfo.size_display})` : 'Retry Install';
                 this.updateCheckStatus('model', 'error', 
                     'Model installation timed out after 30 minutes',
-                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+                    true, retryButtonText, () => this.installModel());
             } else {
+                const retryButtonText = selectedModelInfo.size_display ? `Retry Install (${selectedModelInfo.size_display})` : 'Retry Install';
                 this.updateCheckStatus('model', 'error', 
                     'Model installation failed due to network error',
-                    true, 'Retry Install (18.6 GB)', () => this.installModel());
+                    true, retryButtonText, () => this.installModel());
             }
             
             // Hide built-in games section on error
@@ -920,6 +948,48 @@ window.debugSetup = function() {
     setupManager.startSetup();
 };
 
+// Remix mode functions
+function enterRemixMode(gameId) {
+    if (!gameId || !games[gameId]) return;
+    
+    isRemixMode = true;
+    remixGameId = gameId;
+    
+    // Update UI
+    const remixGameTitle = document.getElementById('remixGameTitle');
+    const remixTitleText = document.getElementById('remixTitleText');
+    const createBtn = document.getElementById('createBtn');
+    const promptInput = document.getElementById('promptInput');
+    
+    if (remixGameTitle) remixGameTitle.style.display = 'flex';
+    if (remixTitleText) remixTitleText.textContent = games[gameId].title;
+    if (createBtn) createBtn.textContent = 'Remix Game';
+    if (promptInput) {
+        promptInput.placeholder = 'Describe how you want to modify this game (e.g., "make the background black instead of white")';
+        promptInput.value = '';
+        promptInput.focus();
+    }
+    
+    hideContextMenu();
+}
+
+function exitRemixMode() {
+    isRemixMode = false;
+    remixGameId = null;
+    
+    // Update UI
+    const remixGameTitle = document.getElementById('remixGameTitle');
+    const createBtn = document.getElementById('createBtn');
+    const promptInput = document.getElementById('promptInput');
+    
+    if (remixGameTitle) remixGameTitle.style.display = 'none';
+    if (createBtn) createBtn.textContent = 'Create Game';
+    if (promptInput) {
+        promptInput.placeholder = 'Describe the game you want to create (e.g., \'snake but the food moves\')';
+        promptInput.value = '';
+    }
+}
+
 // Context menu functionality
 function showContextMenu(x, y, gameId) {
     const contextMenu = document.getElementById('contextMenu');
@@ -938,6 +1008,10 @@ function showContextMenu(x, y, gameId) {
     } else {
         // Show regular context menu for user-created games
         contextMenu.innerHTML = `
+            <button class="context-menu-item" id="remixGame" onclick="remixGame()">
+                🎨 Remix Game
+            </button>
+            <div class="context-menu-separator"></div>
             <button class="context-menu-item" id="openFile" onclick="openGameFile()">
                 📄 Open Python File
             </button>
@@ -968,6 +1042,19 @@ function hideContextMenu() {
 }
 
 // Context menu actions
+async function remixGame() {
+    if (!selectedGameId) return;
+    
+    // Check if it's a built-in game
+    if (games[selectedGameId] && (games[selectedGameId].builtin || selectedGameId.startsWith('builtin_'))) {
+        alert('Cannot remix built-in games');
+        hideContextMenu();
+        return;
+    }
+    
+    enterRemixMode(selectedGameId);
+}
+
 async function openGameFile() {
     if (!selectedGameId) return;
     
@@ -1261,6 +1348,13 @@ async function createGame() {
         return;
     }
     
+    // Check if we're in remix mode
+    if (isRemixMode && !remixGameId) {
+        alert('Invalid remix state. Please exit remix mode and try again.');
+        exitRemixMode();
+        return;
+    }
+    
     isGenerating = true;
     isServerKnownOnline = true; // We're about to use the server, so it should be online
     lastServerStatusTime = Date.now();
@@ -1270,15 +1364,26 @@ async function createGame() {
     document.getElementById('gamesGrid').style.display = 'none';
     setLLMOutput('', false); // Clear output
     
+    // Update spinner status based on mode
+    const statusText = isRemixMode ? 'Remixing game...' : 'Generating game...';
+    document.getElementById('spinnerStatus').textContent = statusText;
+    
     try {
-        const response = await fetch('/api/create-game', {
+        // Choose endpoint and payload based on mode
+        const endpoint = isRemixMode ? '/api/remix-game' : '/api/create-game';
+        const payload = isRemixMode ? {
+            game_id: remixGameId,
+            remix_prompt: prompt
+        } : {
+            prompt: prompt
+        };
+        
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                prompt: prompt,
-            })
+            body: JSON.stringify(payload)
         });
         
         if (!response.ok) {
@@ -1315,9 +1420,16 @@ async function createGame() {
                         } else if (data.type === 'status') {
                             document.getElementById('spinnerStatus').textContent = data.message;
                         } else if (data.type === 'complete') {
-                            // Game created successfully
+                            // Game created/remixed successfully
                             await loadGames();
                             document.getElementById('promptInput').value = '';
+                            
+                            // Handle remix mode transitions
+                            if (isRemixMode) {
+                                // Exit remix mode after successful remix
+                                exitRemixMode();
+                            }
+                            
                             if (data.game_id) {
                                 runningGameId = data.game_id;
                                 renderGames();
@@ -1333,6 +1445,16 @@ async function createGame() {
                                 document.getElementById('gamesGrid').style.display = 'grid';
                             }
                         } else if (data.type === 'error') {
+                            // Game creation/remix failed - but the game file may have been created
+                            // so we should refresh the library to show it
+                            await loadGames();
+                            renderGames();
+                            
+                            // Exit remix mode on error
+                            if (isRemixMode) {
+                                exitRemixMode();
+                            }
+                            
                             // Append error message to existing content instead of replacing it
                             fullResponse += `\n\n---\n\n<div class="error-message">❌ **Error:** ${data.message}</div>`;
                             setLLMOutput(fullResponse, true);
@@ -1546,29 +1668,64 @@ function startGameStatusCheck() {
     const checkStatus = async () => {
         if (!runningGameId) return;
         
+        const currentGameId = runningGameId; // Capture the current game ID
+        
         try {
             const response = await fetch(`/api/game-status/${runningGameId}`);
             const data = await response.json();
             
             if (!data.running) {
+                // Game finished
+                const finishedGameId = runningGameId;
                 runningGameId = null;
                 renderGames();
+                
+                // Mark game as played
+                markGameAsPlayed(finishedGameId);
+                
                 // Hide spinner when game finishes and reset create button
                 isGenerating = false;
                 document.getElementById('createBtn').disabled = false;
                 document.getElementById('gameSpinner').classList.remove('active');
                 document.getElementById('gamesGrid').style.display = 'grid';
+                
+                // Check if this is the first time playing this game and it's not a built-in game
+                const isBuiltin = games[finishedGameId] && (games[finishedGameId].builtin || finishedGameId.startsWith('builtin_'));
+                if (!isBuiltin && !isRemixMode) {
+                    // Enter remix mode for first-time played games
+                    setTimeout(() => {
+                        enterRemixMode(finishedGameId);
+                    }, 500);
+                }
                 return;
             }
         } catch (error) {
             // Game probably finished
+            const finishedGameId = runningGameId;
             runningGameId = null;
             renderGames();
+            
+            // Mark game as played
+            if (finishedGameId) {
+                markGameAsPlayed(finishedGameId);
+            }
+            
             // Hide spinner when game finishes and reset create button
             isGenerating = false;
             document.getElementById('createBtn').disabled = false;
             document.getElementById('gameSpinner').classList.remove('active');
             document.getElementById('gamesGrid').style.display = 'grid';
+            
+            // Check if this is the first time playing this game and it's not a built-in game
+            if (finishedGameId) {
+                const isBuiltin = games[finishedGameId] && (games[finishedGameId].builtin || finishedGameId.startsWith('builtin_'));
+                if (!isBuiltin && !isRemixMode) {
+                    // Enter remix mode for first-time played games
+                    setTimeout(() => {
+                        enterRemixMode(finishedGameId);
+                    }, 500);
+                }
+            }
             return;
         }
         
@@ -1576,6 +1733,43 @@ function startGameStatusCheck() {
     };
     
     setTimeout(checkStatus, 2000);
+}
+
+// Store selected model info globally
+let selectedModelInfo = {
+    model_name: null,
+    size_gb: null,
+    size_display: null
+};
+
+// Update the selected model name in the UI
+async function updateSelectedModelName() {
+    try {
+        const response = await fetch('/api/selected-model');
+        const data = await response.json();
+        
+        // Update global model info with server response
+        selectedModelInfo = {
+            model_name: data.model_name,
+            size_gb: data.size_gb || null,
+            size_display: data.size_display || null
+        };
+        
+        // Update the model description in the setup screen
+        const descModel = document.getElementById('descModel');
+        if (descModel) {
+            descModel.textContent = `Checking for ${selectedModelInfo.model_name} model...`;
+        }
+        
+        if (selectedModelInfo.size_display) {
+            console.log('Selected model:', selectedModelInfo.model_name, 'Size:', selectedModelInfo.size_display);
+        } else {
+            console.log('Selected model:', selectedModelInfo.model_name, '(size unknown)');
+        }
+    } catch (error) {
+        console.error('Failed to fetch selected model:', error);
+        // Keep the default values if fetch fails
+    }
 }
 
 // Handle Enter key in prompt input
