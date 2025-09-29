@@ -30,5 +30,6 @@ jobs:
         
     - name: Lint with pylint
       run: |
-        pylint lemonade_arcade --rcfile .pylintrc 
+        pylint src/infinity_arcade --rcfile .pylintrc 
+        pylint src/lemonade_client --rcfile .pylintrc 
 

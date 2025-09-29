@@ -58,11 +58,11 @@ def test_files():
 
     required_files = [
         "setup.py",
-        "lemonade_arcade.spec",
+        "infinity_arcade.spec",
         "build_exe.ps1",
-        "lemonade_arcade/__init__.py",
-        "lemonade_arcade/main.py",
-        "lemonade_arcade/cli.py",
+        "src/infinity_arcade/__init__.py",
+        "src/infinity_arcade/main.py",
+        "src/infinity_arcade/cli.py",
     ]
 
     for file_path in required_files:
@@ -77,7 +77,7 @@ def test_files():
 
 def main():
     """Run all tests."""
-    print("Lemonade Arcade Executable Build Test")
+    print("Infinity Arcade Executable Build Test")
     print("=" * 38)
 
     success = True
@@ -91,7 +91,7 @@ def main():
         print("✓ All tests passed! Ready to build executable.")
         print("\nTo build the executable, run:")
         print("  PowerShell: .\\build_exe.ps1")
-        print("  Python:     python -m PyInstaller lemonade_arcade.spec")
+        print("  Python:     python -m PyInstaller infinity_arcade.spec")
     else:
         print("✗ Some tests failed. Please fix the issues above.")
         return 1

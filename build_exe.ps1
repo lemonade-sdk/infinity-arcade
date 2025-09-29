@@ -1,12 +1,12 @@
-# Lemonade Arcade Executable Build Script
-# This script builds the Lemonade Arcade application using PyInstaller
+# Infinity Arcade Executable Build Script
+# This script builds the Infinity Arcade application using PyInstaller
 
 param(
     [switch]$Clean,
     [string]$OutputDir = "dist"
 )
 
-Write-Host "Lemonade Arcade Executable Builder" -ForegroundColor Green
+Write-Host "Infinity Arcade Executable Builder" -ForegroundColor Green
 Write-Host "==================================" -ForegroundColor Green
 
 # Get script directory
@@ -41,10 +41,10 @@ Invoke-Command-Safe "python -m pip install pyinstaller" "Failed to install PyIns
 
 # Build executable
 Write-Host "Building executable with PyInstaller..." -ForegroundColor Cyan
-Invoke-Command-Safe "python -m PyInstaller lemonade_arcade.spec" "Failed to build executable"
+Invoke-Command-Safe "python -m PyInstaller infinity_arcade.spec" "Failed to build executable"
 
 # Verify executable was created
-$ExePath = "$OutputDir\LemonadeArcade.exe"
+$ExePath = "$OutputDir\InfinityArcade.exe"
 if (-not (Test-Path $ExePath)) {
     Write-Error "Executable not found at $ExePath"
     exit 1

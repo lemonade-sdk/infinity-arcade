@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Lemonade Arcade - Main FastAPI application
+Infinity Arcade - Main FastAPI application
 """
 
 import json
@@ -24,12 +24,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
 
-import lemonade_arcade.lemonade_client as lc
-from lemonade_arcade.arcade_games import ArcadeGames
-from lemonade_arcade.utils import get_resource_path
-from lemonade_arcade.game_launcher import GameLauncher
-from lemonade_arcade.game_orchestrator import GameOrchestrator
-from lemonade_arcade.llm_service import LLMService
+import lemonade_client as lc
+from infinity_arcade.arcade_games import ArcadeGames
+from infinity_arcade.utils import get_resource_path
+from infinity_arcade.game_launcher import GameLauncher
+from infinity_arcade.game_orchestrator import GameOrchestrator
+from infinity_arcade.llm_service import LLMService
 
 # Minimum required version of lemonade-server
 LEMONADE_MINIMUM_VERSION = "8.1.10"
@@ -40,7 +40,7 @@ LEMONADE_MINIMUM_VERSION = "8.1.10"
 pygame = None
 
 # Logger will be configured by CLI or set to INFO if run directly
-logger = logging.getLogger("lemonade_arcade.main")
+logger = logging.getLogger("infinity_arcade.main")
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -64,7 +64,7 @@ class ArcadeApp:
     def __init__(self) -> None:
         # Initialize basic components first
         self.lemonade_handle = lc.LemonadeClient(
-            minimum_version=LEMONADE_MINIMUM_VERSION
+            minimum_version=LEMONADE_MINIMUM_VERSION, logger=logger
         )
         self.arcade_games = ArcadeGames()
         self.game_launcher = GameLauncher()
@@ -76,7 +76,7 @@ class ArcadeApp:
         self.orchestrator = None
 
         # FastAPI app and resources
-        self.app = FastAPI(title="Lemonade Arcade", version="0.1.0")
+        self.app = FastAPI(title="Infinity Arcade", version="0.1.0")
         self.static_dir = get_resource_path("static")
         self.templates_dir = get_resource_path("templates")
         self.templates = Jinja2Templates(directory=str(self.templates_dir))
@@ -91,13 +91,13 @@ class ArcadeApp:
     async def initialize_model_and_services(self) -> None:
         """Initialize model selection and dependent services asynchronously."""
         # Determine required model
-        if os.environ.get("LEMONADE_ARCADE_MODEL"):
-            self.required_model = os.environ.get("LEMONADE_ARCADE_MODEL")
+        if os.environ.get("INFINITY_ARCADE_MODEL"):
+            self.required_model = os.environ.get("INFINITY_ARCADE_MODEL")
             self.required_model_size = None  # Unknown size for custom models
             logger.info(f"Using model from environment variable: {self.required_model}")
         else:
             # Use hardware-based selection with caching in the arcade directory
-            cache_dir = str(self.arcade_games.games_dir.parent)  # ~/.lemonade-arcade
+            cache_dir = str(self.arcade_games.games_dir.parent)  # ~/.infinity-arcade
             self.required_model, self.required_model_size = (
                 await self.lemonade_handle.select_model_for_hardware(
                     cache_dir=cache_dir
@@ -210,11 +210,9 @@ class ArcadeApp:
 
         @self.app.get("/api/model-installation-status")
         async def model_installation_status():
-            logger.info("Model installation status endpoint called")
             model_status = await self.lemonade_handle.check_model_installed(
                 self.required_model
             )
-            logger.info(f"Model check result: {model_status}")
             result = {
                 "model_installed": model_status["installed"],
                 "model_name": model_status["model_name"],
@@ -484,7 +482,7 @@ app = arcade_app.app
 def run_game_file(game_file_path):
     """Run a game file directly - used when executable is called with a game file."""
     try:
-        print(f"Lemonade Arcade - Running game: {game_file_path}")
+        print(f"Infinity Arcade - Running game: {game_file_path}")
 
         # Import pygame here, right before we need it
         # pylint: disable=global-statement
@@ -533,19 +531,19 @@ def main():
         run_game_file(sys.argv[1])
         return
 
-    # Server mode: start the Lemonade Arcade server
+    # Server mode: start the Infinity Arcade server
     import webbrowser
     import threading
 
     # Keep console visible for debugging and control
-    print("Starting Lemonade Arcade...")
+    print("Starting Infinity Arcade...")
     print("Press Ctrl+C to quit")
 
     port = 8080
 
     # Start the server in a separate thread
     def run_server():
-        print(f"Starting Lemonade Arcade server on http://127.0.0.1:{port}")
+        print(f"Starting Infinity Arcade server on http://127.0.0.1:{port}")
         try:
             uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
         except Exception as e:
@@ -566,7 +564,7 @@ def main():
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\nShutting down Lemonade Arcade...")
+        print("\nShutting down Infinity Arcade...")
         # Clean up any running games
         for game_id in list(arcade_app.game_launcher.running_games.keys()):
             arcade_app.game_launcher.stop_game(game_id)

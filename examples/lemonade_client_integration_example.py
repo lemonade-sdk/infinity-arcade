@@ -8,7 +8,7 @@ Complete example of integrating LemonadeClient into an application.
 import asyncio
 from openai import AsyncOpenAI
 
-from lemonade_arcade.lemonade_client import LemonadeClient
+from lemonade_client import LemonadeClient
 
 
 # Run everything in an async context

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Dynamic Snake Game - Snake but the food moves around
-Built-in game for Lemonade Arcade
+Built-in game for Infinity Arcade
 """
 
 import pygame

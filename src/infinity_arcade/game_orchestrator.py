@@ -4,12 +4,12 @@ import time
 from pathlib import Path
 from typing import AsyncGenerator
 
-from lemonade_arcade.arcade_games import ArcadeGames
-from lemonade_arcade.game_launcher import GameLauncher
-from lemonade_arcade.llm_service import LLMService, ExtractedCode
+from infinity_arcade.arcade_games import ArcadeGames
+from infinity_arcade.game_launcher import GameLauncher
+from infinity_arcade.llm_service import LLMService, ExtractedCode
 
 
-logger = logging.getLogger("lemonade_arcade.main")
+logger = logging.getLogger("infinity_arcade.main")
 
 
 class GameOrchestrator:
@@ -24,7 +24,7 @@ class GameOrchestrator:
 
     def _get_game_file_path(self, game_id: str) -> Path:
         if game_id in self.storage.builtin_games:
-            from lemonade_arcade.utils import get_resource_path
+            from infinity_arcade.utils import get_resource_path
 
             builtin_games_dir = Path(get_resource_path("builtin_games"))
             return builtin_games_dir / self.storage.builtin_games[game_id]["file"]

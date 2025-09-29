@@ -37,14 +37,14 @@ def find_pygame_binaries():
 pygame_binaries = find_pygame_binaries()
 
 a = Analysis(
-    ['lemonade_arcade/main.py'],
+    ['src/infinity_arcade/main.py'],
     pathex=[str(base_dir)],
     binaries=pygame_binaries,
     datas=[
         # Include static files and templates
-        ('lemonade_arcade/static', 'lemonade_arcade/static'),
-        ('lemonade_arcade/templates', 'lemonade_arcade/templates'),
-        ('lemonade_arcade/builtin_games', 'lemonade_arcade/builtin_games'),
+        ('src/infinity_arcade/static', 'infinity_arcade/static'),
+        ('src/infinity_arcade/templates', 'infinity_arcade/templates'),
+        ('src/infinity_arcade/builtin_games', 'infinity_arcade/builtin_games'),
     ],
     hiddenimports=[
         'uvicorn.lifespan.on',
@@ -104,7 +104,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='LemonadeArcade',
+    name='InfinityArcade',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
