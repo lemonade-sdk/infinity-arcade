@@ -1774,7 +1774,7 @@ async function updateSelectedModelName() {
 
 // Handle Enter key in prompt input
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM Content Loaded - Lemonade Arcade initialized');
+    console.log('DOM Content Loaded - Infinity Arcade initialized');
     
     // Check if setup screen exists
     const setupScreen = document.getElementById('setupScreen');

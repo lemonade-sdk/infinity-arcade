@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Dict
 
-logger = logging.getLogger("lemonade_arcade.main")
+logger = logging.getLogger("infinity_arcade.main")
 
 
 class ArcadeGames:
@@ -18,7 +18,7 @@ class ArcadeGames:
     def __init__(self):
 
         # Global state
-        self.games_dir = Path.home() / ".lemonade-arcade" / "games"
+        self.games_dir = Path.home() / ".infinity-arcade" / "games"
         self.game_metadata: Dict[str, Dict] = {}
 
         # Ensure games directory exists

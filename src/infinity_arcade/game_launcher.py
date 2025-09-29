@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, Tuple
 
 
-logger = logging.getLogger("lemonade_arcade.main")
+logger = logging.getLogger("infinity_arcade.main")
 
 
 class GameLauncher:
