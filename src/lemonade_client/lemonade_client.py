@@ -19,8 +19,6 @@ MODELS = {
     "default": ("Qwen3-4B-Instruct-2507-GGUF", 2.5),
 }
 
-logger = logging.getLogger("infinity_arcade.main")
-
 
 class LemonadeClient:
     """
@@ -29,13 +27,17 @@ class LemonadeClient:
     by automating many common tasks.
     """
 
-    def __init__(self, minimum_version: str = "8.1.0"):
+    def __init__(self, minimum_version: str = "8.1.0", logger=None):
         # Track which command is used for this server instance
         self.server_command = None
         # Track the server process to avoid starting multiple instances
         self.server_process = None
         # Store the minimum required version
         self.minimum_version = minimum_version
+        # Set up logger - use provided logger or create a default one
+        self.logger = (
+            logger if logger is not None else logging.getLogger("lemonade_client")
+        )
 
         self.url = "http://localhost:8000"
 
@@ -73,7 +75,9 @@ class LemonadeClient:
             if "lemonade_server" in path_entry.lower() and "bin" in path_entry.lower():
                 if os.path.exists(path_entry):
                     paths.append(path_entry)
-                    logger.info(f"Found lemonade-server path in PATH: {path_entry}")
+                    self.logger.info(
+                        f"Found lemonade-server path in PATH: {path_entry}"
+                    )
 
         return paths
 
@@ -86,7 +90,7 @@ class LemonadeClient:
         installation operations to avoid using stale cached paths.
         """
 
-        logger.info("Resetting server state")
+        self.logger.info("Resetting server state")
         self.server_command = None
         if self.server_process and self.server_process.poll() is None:
             try:
@@ -109,7 +113,7 @@ class LemonadeClient:
                 # This will raise an import exception on linux right now
                 import winreg
 
-                logger.info("Refreshing environment variables...")
+                self.logger.info("Refreshing environment variables...")
 
                 # Get system PATH
                 with winreg.OpenKey(
@@ -139,17 +143,19 @@ class LemonadeClient:
                 for scripts_path in python_scripts_paths:
                     if scripts_path.lower() not in new_path.lower():
                         new_path = scripts_path + ";" + new_path
-                        logger.info(f"Added {scripts_path} to PATH")
+                        self.logger.info(f"Added {scripts_path} to PATH")
 
                 os.environ["PATH"] = new_path
-                logger.info(f"Updated PATH: {new_path[:200]}...")  # Log first 200 chars
+                self.logger.info(
+                    f"Updated PATH: {new_path[:200]}..."
+                )  # Log first 200 chars
             else:
-                logger.info(
+                self.logger.info(
                     "Non-Windows platform, skipping registry-based PATH refresh"
                 )
 
         except Exception as e:
-            logger.warning(f"Failed to refresh environment: {e}")
+            self.logger.warning(f"Failed to refresh environment: {e}")
 
     def _discover_python_scripts_paths(self):
         """Discover Python Scripts directories where pip installs console scripts."""
@@ -160,7 +166,7 @@ class LemonadeClient:
         scripts_dir = os.path.join(python_base, "Scripts")
         if os.path.exists(scripts_dir):
             python_scripts_paths.append(scripts_dir)
-            logger.info(f"Found Python Scripts directory: {scripts_dir}")
+            self.logger.info(f"Found Python Scripts directory: {scripts_dir}")
 
         # Add user site-packages Scripts directory
         try:
@@ -171,7 +177,7 @@ class LemonadeClient:
                 user_scripts = os.path.join(os.path.dirname(user_site), "Scripts")
                 if os.path.exists(user_scripts):
                     python_scripts_paths.append(user_scripts)
-                    logger.info(f"Found user Scripts directory: {user_scripts}")
+                    self.logger.info(f"Found user Scripts directory: {user_scripts}")
         except Exception:
             pass
 
@@ -205,7 +211,7 @@ class LemonadeClient:
             subprocess.CompletedProcess for regular commands, subprocess.Popen for
             background processes, or None if all command attempts failed
         """
-        logger.info(f"Executing lemonade-server command with args: {args}")
+        self.logger.info(f"Executing lemonade-server command with args: {args}")
 
         # If we already know which command to use, use only that one
         if self.server_command:
@@ -245,7 +251,7 @@ class LemonadeClient:
 
         for i, cmd in enumerate(commands_to_try):
             try:
-                logger.info(f"Trying command {i+1}: {cmd}")
+                self.logger.info(f"Trying command {i+1}: {cmd}")
 
                 # Determine if we should use shell=True based on command type
                 use_shell = not (len(cmd) >= 3 and cmd[1] == "-m")
@@ -269,7 +275,9 @@ class LemonadeClient:
                     # Store the successful command for future use
                     if not self.server_command:
                         self.server_command = cmd[: -len(args)]
-                        logger.info(f"Stored server command: {self.server_command}")
+                        self.logger.info(
+                            f"Stored server command: {self.server_command}"
+                        )
 
                     return process
                 else:
@@ -284,38 +292,42 @@ class LemonadeClient:
                         check=False,  # Don't raise exception on non-zero exit
                     )
 
-                    logger.debug(f"Command {i+1} returned code: {result.returncode}")
-                    logger.debug(f"Command {i+1} stdout: '{result.stdout}'")
-                    logger.debug(f"Command {i+1} stderr: '{result.stderr}'")
+                    self.logger.debug(
+                        f"Command {i+1} returned code: {result.returncode}"
+                    )
+                    self.logger.debug(f"Command {i+1} stdout: '{result.stdout}'")
+                    self.logger.debug(f"Command {i+1} stderr: '{result.stderr}'")
 
                     if result.returncode == 0:
                         # Store the successful command for future use
                         if not self.server_command:
                             self.server_command = cmd[: -len(args)]
-                            logger.info(f"Stored server command: {self.server_command}")
+                            self.logger.info(
+                                f"Stored server command: {self.server_command}"
+                            )
 
                         return result
                     else:
-                        logger.debug(
+                        self.logger.debug(
                             f"Command {i+1} failed with return code {result.returncode}"
                         )
                         if result.stderr:
-                            logger.debug(f"stderr: {result.stderr}")
+                            self.logger.debug(f"stderr: {result.stderr}")
                         # Try next command
                         continue
 
             except FileNotFoundError as e:
-                logger.debug(f"Command {i+1} not found: {e}")
+                self.logger.debug(f"Command {i+1} not found: {e}")
                 continue
             except subprocess.TimeoutExpired as e:
-                logger.debug(f"Command {i+1} timed out: {e}")
+                self.logger.debug(f"Command {i+1} timed out: {e}")
                 continue
             except Exception as e:
-                logger.error(f"Unexpected error with command {i+1}: {e}")
+                self.logger.error(f"Unexpected error with command {i+1}: {e}")
                 continue
 
         # If we get here, all commands failed
-        logger.error("All lemonade-server commands failed")
+        self.logger.error("All lemonade-server commands failed")
         return None
 
     async def check_lemonade_sdk_available(self):
@@ -329,7 +341,7 @@ class LemonadeClient:
         Returns:
             bool: True if lemonade-sdk package can be imported, False otherwise
         """
-        logger.info("Checking for lemonade-sdk package...")
+        self.logger.info("Checking for lemonade-sdk package...")
         try:
             # Handle Windows vs Unix path quoting differently
             cmd = [sys.executable, "-c", "import lemonade_server; print('available')"]
@@ -349,7 +361,7 @@ class LemonadeClient:
 
                 cmd_str = " ".join(shlex.quote(arg) for arg in cmd)
 
-            logger.debug(f"Executing command: {cmd_str}")
+            self.logger.debug(f"Executing command: {cmd_str}")
             result = subprocess.run(
                 cmd_str,
                 capture_output=True,
@@ -359,15 +371,15 @@ class LemonadeClient:
                 check=False,  # Don't raise exception on non-zero exit
             )
 
-            logger.debug(
+            self.logger.debug(
                 f"Command result: returncode={result.returncode}, "
                 f"stdout='{result.stdout.strip()}', stderr='{result.stderr.strip()}'"
             )
             is_available = result.returncode == 0 and "available" in result.stdout
-            logger.info(f"lemonade-sdk package available: {is_available}")
+            self.logger.info(f"lemonade-sdk package available: {is_available}")
             return is_available
         except Exception as e:
-            logger.info(f"lemonade-sdk package check failed: {e}")
+            self.logger.info(f"lemonade-sdk package check failed: {e}")
             return False
 
     async def check_lemonade_server_version(self):
@@ -382,12 +394,12 @@ class LemonadeClient:
             dict: Contains 'installed' (bool), 'version' (str), 'compatible' (bool),
                   and 'required_version' (str) keys
         """
-        logger.info("Checking lemonade-server version...")
+        self.logger.info("Checking lemonade-server version...")
 
         result = await self.execute_lemonade_server_command(["--version"])
 
         if result is None:
-            logger.error("All lemonade-server commands failed")
+            self.logger.error("All lemonade-server commands failed")
             return {
                 "installed": False,
                 "version": None,
@@ -396,19 +408,19 @@ class LemonadeClient:
             }
 
         version_line = result.stdout.strip()
-        logger.info(f"Raw version output: '{version_line}'")
+        self.logger.info(f"Raw version output: '{version_line}'")
 
         # Extract version number (format might be "lemonade-server 8.1.3" or just "8.1.3")
         version_match = re.search(r"(\d+\.\d+\.\d+)", version_line)
         if version_match:
             version = version_match.group(1)
-            logger.info(f"Extracted version: {version}")
+            self.logger.info(f"Extracted version: {version}")
 
             # Check if the version number is allowed
             version_parts = [int(x) for x in version.split(".")]
             required_parts = [int(x) for x in self.minimum_version.split(".")]
             is_compatible = version_parts >= required_parts
-            logger.info(
+            self.logger.info(
                 f"Version parts: {version_parts}, Required: {required_parts}, "
                 "Compatible: {is_compatible}"
             )
@@ -420,7 +432,9 @@ class LemonadeClient:
                 "required_version": self.minimum_version,
             }
         else:
-            logger.warning(f"Could not extract version from output: '{version_line}'")
+            self.logger.warning(
+                f"Could not extract version from output: '{version_line}'"
+            )
             return {
                 "installed": True,
                 "version": "unknown",
@@ -439,21 +453,21 @@ class LemonadeClient:
         Returns:
             bool: True if server process is running, False otherwise
         """
-        logger.info("Checking if lemonade-server is running...")
+        self.logger.info("Checking if lemonade-server is running...")
 
         result = await self.execute_lemonade_server_command(["status"])
 
         if result is None:
-            logger.error("All lemonade-server status commands failed")
+            self.logger.error("All lemonade-server status commands failed")
             return False
 
         output = result.stdout.strip()
-        logger.info(f"Status output: '{output}'")
+        self.logger.info(f"Status output: '{output}'")
         if "Server is running" in output:
-            logger.info("Server is running according to status command")
+            self.logger.info("Server is running according to status command")
             return True
         else:
-            logger.info("Server is not running according to status command")
+            self.logger.info("Server is not running according to status command")
             return False
 
     async def start_lemonade_server(self):
@@ -468,11 +482,11 @@ class LemonadeClient:
             dict: Contains 'success' (bool) and 'message' (str) keys indicating
                   whether the server started successfully
         """
-        logger.info("Attempting to start lemonade-server...")
+        self.logger.info("Attempting to start lemonade-server...")
 
         # Check if server is already running
         if self.server_process and self.server_process.poll() is None:
-            logger.info("Server process is already running")
+            self.logger.info("Server process is already running")
             return {"success": True, "message": "Server is already running"}
 
         stdout_file = tempfile.NamedTemporaryFile(
@@ -491,7 +505,7 @@ class LemonadeClient:
         )
 
         if process is None:
-            logger.error("All lemonade-server start commands failed")
+            self.logger.error("All lemonade-server start commands failed")
             stdout_file.close()
             stderr_file.close()
             try:
@@ -509,7 +523,9 @@ class LemonadeClient:
 
         # Check if process is still alive
         if process.poll() is None:
-            logger.info(f"Successfully started lemonade-server with PID: {process.pid}")
+            self.logger.info(
+                f"Successfully started lemonade-server with PID: {process.pid}"
+            )
             self.server_process = process
 
             # Close temp files
@@ -529,13 +545,13 @@ class LemonadeClient:
                 with open(stdout_file.name, "r", encoding="utf-8") as f:
                     stdout_content = f.read().strip()
 
-                logger.error(
+                self.logger.error(
                     f"Server failed immediately. Return code: {process.returncode}"
                 )
                 if stderr_content:
-                    logger.error(f"Stderr: {stderr_content}")
+                    self.logger.error(f"Stderr: {stderr_content}")
                 if stdout_content:
-                    logger.info(f"Stdout: {stdout_content}")
+                    self.logger.info(f"Stdout: {stdout_content}")
 
                 # Clean up temp files
                 try:
@@ -545,7 +561,7 @@ class LemonadeClient:
                     pass
 
             except Exception as read_error:
-                logger.error(f"Could not read process output: {read_error}")
+                self.logger.error(f"Could not read process output: {read_error}")
 
             return {"success": False, "message": "Server process died immediately"}
 
@@ -562,7 +578,7 @@ class LemonadeClient:
                   installation result and any error details
         """
         try:
-            logger.info("Installing lemonade-sdk package using pip...")
+            self.logger.info("Installing lemonade-sdk package using pip...")
 
             # Install the package
             result = subprocess.run(
@@ -574,7 +590,7 @@ class LemonadeClient:
             )
 
             if result.returncode == 0:
-                logger.info("lemonade-sdk package installed successfully")
+                self.logger.info("lemonade-sdk package installed successfully")
                 return {
                     "success": True,
                     "message": "lemonade-sdk package installed successfully. "
@@ -584,11 +600,11 @@ class LemonadeClient:
                 error_msg = (
                     result.stderr or result.stdout or "Unknown installation error"
                 )
-                logger.error(f"pip install failed: {error_msg}")
+                self.logger.error(f"pip install failed: {error_msg}")
                 return {"success": False, "message": f"pip install failed: {error_msg}"}
 
         except Exception as e:
-            logger.error(f"Failed to install lemonade-sdk package: {e}")
+            self.logger.error(f"Failed to install lemonade-sdk package: {e}")
             return {"success": False, "message": f"Failed to install: {e}"}
 
     async def download_and_install_lemonade_server(self):
@@ -609,14 +625,14 @@ class LemonadeClient:
 
         # If not in PyInstaller environment, prefer pip installation
         if not self.is_pyinstaller_environment():
-            logger.info(
+            self.logger.info(
                 "Development environment detected, attempting pip installation first..."
             )
             pip_result = await self.install_lemonade_sdk_package()
             if pip_result["success"]:
                 return pip_result
             else:
-                logger.info(
+                self.logger.info(
                     "pip installation failed, falling back to GitHub instructions..."
                 )
                 return {
@@ -637,7 +653,7 @@ class LemonadeClient:
             temp_dir = tempfile.mkdtemp()
             installer_path = os.path.join(temp_dir, "Lemonade_Server_Installer.exe")
 
-            logger.info(f"Downloading installer from {installer_url}")
+            self.logger.info(f"Downloading installer from {installer_url}")
 
             # Download with progress tracking
             async with httpx.AsyncClient(
@@ -654,12 +670,14 @@ class LemonadeClient:
                         async for chunk in response.aiter_bytes(8192):
                             f.write(chunk)
 
-            logger.info(f"Downloaded installer to {installer_path}")
+            self.logger.info(f"Downloaded installer to {installer_path}")
 
             # Run interactive installation (not silent)
             install_cmd = [installer_path]
 
-            logger.info(f"Running interactive installation: {' '.join(install_cmd)}")
+            self.logger.info(
+                f"Running interactive installation: {' '.join(install_cmd)}"
+            )
 
             # Start the installer but don't wait for it to complete
             # This allows the user to see the installation UI
@@ -672,7 +690,7 @@ class LemonadeClient:
                 # Check if the process is still running
                 if process.poll() is None:
                     # Process is still running, installer likely opened successfully
-                    logger.info(
+                    self.logger.info(
                         f"Installer launched successfully with PID: {process.pid}"
                     )
                     return {
@@ -682,7 +700,7 @@ class LemonadeClient:
                     }
                 else:
                     # Process died immediately
-                    logger.error(
+                    self.logger.error(
                         f"Installer process died immediately with return code: {process.returncode}"
                     )
                     return {
@@ -692,7 +710,7 @@ class LemonadeClient:
                     }
 
             except Exception as launch_error:
-                logger.error(f"Failed to launch installer: {launch_error}")
+                self.logger.error(f"Failed to launch installer: {launch_error}")
                 return {
                     "success": False,
                     "message": f"Failed to launch installer: {launch_error}. Please download and install manually from: https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe",
@@ -700,7 +718,7 @@ class LemonadeClient:
                 }
 
         except Exception as e:
-            logger.error(f"Failed to download/install lemonade-server: {e}")
+            self.logger.error(f"Failed to download/install lemonade-server: {e}")
             return {"success": False, "message": f"Failed to install: {e}"}
 
     async def check_lemonade_server_api(self):
@@ -714,7 +732,7 @@ class LemonadeClient:
         Returns:
             bool: True if server API is responding, False otherwise
         """
-        logger.info(f"Checking Lemonade Server at {self.url}")
+        self.logger.info(f"Checking Lemonade Server at {self.url}")
 
         # Try multiple times with increasing delays to give server time to start
         for attempt in range(3):
@@ -722,7 +740,7 @@ class LemonadeClient:
                 # Use a longer timeout and retry logic for more robust checking
                 async with httpx.AsyncClient(timeout=15.0) as client:
                     response = await client.get(f"{self.url}/api/v1/models")
-                    logger.info(
+                    self.logger.info(
                         f"Server check attempt {attempt + 1} response status: "
                         f"{response.status_code}"
                     )
@@ -730,26 +748,28 @@ class LemonadeClient:
                         return True
                     elif response.status_code == 404:
                         # Try the health endpoint if models endpoint doesn't exist
-                        logger.info("Models endpoint not found, trying health endpoint")
+                        self.logger.info(
+                            "Models endpoint not found, trying health endpoint"
+                        )
                         try:
                             health_response = await client.get(f"{self.url}/health")
-                            logger.info(
+                            self.logger.info(
                                 f"Health check response status: {health_response.status_code}"
                             )
                             return health_response.status_code == 200
                         except Exception as e:
-                            logger.info(f"Health check failed: {e}")
+                            self.logger.info(f"Health check failed: {e}")
 
             except httpx.TimeoutException:
-                logger.info(
+                self.logger.info(
                     f"Server check attempt {attempt + 1} timed out - server might be starting up"
                 )
             except httpx.ConnectError as e:
-                logger.info(
+                self.logger.info(
                     f"Server check attempt {attempt + 1} connection failed: {e}"
                 )
             except Exception as e:
-                logger.info(f"Server check attempt {attempt + 1} failed: {e}")
+                self.logger.info(f"Server check attempt {attempt + 1} failed: {e}")
 
             # Wait before next attempt (except on last attempt)
             if attempt < 2:
@@ -757,7 +777,7 @@ class LemonadeClient:
 
                 await asyncio.sleep(2)
 
-        logger.info("All server check attempts failed")
+        self.logger.info("All server check attempts failed")
         return False
 
     async def get_available_models(self):
@@ -771,21 +791,21 @@ class LemonadeClient:
         Returns:
             List[str]: List of model names/IDs available on the server, empty list if none found
         """
-        logger.info("Getting available models from Lemonade Server")
+        self.logger.info("Getting available models from Lemonade Server")
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(f"{self.url}/api/v1/models")
                 if response.status_code == 200:
                     data = response.json()
                     models = [model["id"] for model in data.get("data", [])]
-                    logger.info(f"Found {len(models)} available models: {models}")
+                    self.logger.info(f"Found {len(models)} available models: {models}")
                     return models
                 else:
-                    logger.warning(
+                    self.logger.warning(
                         f"Failed to get models, status: {response.status_code}"
                     )
         except Exception as e:
-            logger.info(f"Error getting models: {e}")
+            self.logger.info(f"Error getting models: {e}")
         return []
 
     async def check_model_installed(self, model):
@@ -806,7 +826,7 @@ class LemonadeClient:
             is_installed = model in models
             return {"installed": is_installed, "model_name": model}
         except Exception as e:
-            logger.error(f"Error checking required model: {e}")
+            self.logger.error(f"Error checking required model: {e}")
             return {"installed": False, "model_name": model}
 
     async def check_model_loaded(self, model):
@@ -823,7 +843,7 @@ class LemonadeClient:
         Returns:
             dict: Contains 'loaded' (bool), 'model_name' (str), and 'current_model' (str) keys
         """
-        logger.info(f"Checking if model is loaded: {model}")
+        self.logger.info(f"Checking if model is loaded: {model}")
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -834,7 +854,7 @@ class LemonadeClient:
                     # Check if the required model is the currently loaded model
                     loaded_model = status_data.get("model_loaded", "")
                     is_loaded = loaded_model == model
-                    logger.info(
+                    self.logger.info(
                         f"Model loaded status: {is_loaded}, current model: {loaded_model}"
                     )
                     return {
@@ -843,7 +863,7 @@ class LemonadeClient:
                         "current_model": loaded_model,
                     }
                 else:
-                    logger.warning(
+                    self.logger.warning(
                         f"Failed to get server status: HTTP {response.status_code}"
                     )
                     return {
@@ -852,7 +872,7 @@ class LemonadeClient:
                         "current_model": None,
                     }
         except Exception as e:
-            logger.error(f"Error checking model loaded status: {e}")
+            self.logger.error(f"Error checking model loaded status: {e}")
             return {
                 "loaded": False,
                 "model_name": model,
@@ -874,7 +894,7 @@ class LemonadeClient:
             dict: Contains 'success' (bool) and 'message' (str) keys indicating
                   installation result and any error details
         """
-        logger.info(f"Installing model: {model}")
+        self.logger.info(f"Installing model: {model}")
 
         try:
             async with httpx.AsyncClient(
@@ -887,22 +907,22 @@ class LemonadeClient:
                 )
 
                 if response.status_code == 200:
-                    logger.info(f"Successfully installed model: {model}")
+                    self.logger.info(f"Successfully installed model: {model}")
                     return {
                         "success": True,
                         "message": f"Model {model} installed successfully",
                     }
                 else:
                     error_msg = f"Failed to install model: HTTP {response.status_code}"
-                    logger.error(error_msg)
+                    self.logger.error(error_msg)
                     return {"success": False, "message": error_msg}
         except httpx.TimeoutException:
             error_msg = "Model installation timed out - this is a large model and may take longer"
-            logger.warning(error_msg)
+            self.logger.warning(error_msg)
             return {"success": False, "message": error_msg}
         except Exception as e:
             error_msg = f"Error installing model: {e}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return {"success": False, "message": error_msg}
 
     async def load_model(self, model):
@@ -920,7 +940,7 @@ class LemonadeClient:
             dict: Contains 'success' (bool) and 'message' (str) keys indicating
                   whether the model loaded successfully
         """
-        logger.info(f"Loading model: {model}")
+        self.logger.info(f"Loading model: {model}")
 
         try:
             async with httpx.AsyncClient(
@@ -933,22 +953,22 @@ class LemonadeClient:
                 )
 
                 if response.status_code == 200:
-                    logger.info(f"Successfully loaded model: {model}")
+                    self.logger.info(f"Successfully loaded model: {model}")
                     return {
                         "success": True,
                         "message": f"Model {model} loaded successfully",
                     }
                 else:
                     error_msg = f"Failed to load model: HTTP {response.status_code}"
-                    logger.error(error_msg)
+                    self.logger.error(error_msg)
                     return {"success": False, "message": error_msg}
         except httpx.TimeoutException:
             error_msg = "Model loading timed out"
-            logger.warning(error_msg)
+            self.logger.warning(error_msg)
             return {"success": False, "message": error_msg}
         except Exception as e:
             error_msg = f"Error loading model: {e}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return {"success": False, "message": error_msg}
 
     async def get_system_info(
@@ -970,7 +990,7 @@ class LemonadeClient:
         Returns:
             dict: System information from server, or None if unavailable
         """
-        logger.info("Getting system information from lemonade-server...")
+        self.logger.info("Getting system information from lemonade-server...")
 
         # Set up cache directory and file
         if cache_dir is None:
@@ -993,17 +1013,19 @@ class LemonadeClient:
                     expiry_time = cache_time + timedelta(hours=cache_duration_hours)
 
                     if datetime.now() < expiry_time:
-                        logger.info("Using cached system info (within expiry time)")
+                        self.logger.info(
+                            "Using cached system info (within expiry time)"
+                        )
                         return cache_data["system_info"]
                     else:
-                        logger.info("Cache expired, fetching fresh system info")
+                        self.logger.info("Cache expired, fetching fresh system info")
                 else:
                     # Cache never expires
-                    logger.info("Using cached system info (no expiry)")
+                    self.logger.info("Using cached system info (no expiry)")
                     return cache_data["system_info"]
 
             except Exception as e:
-                logger.warning(f"Failed to read cache file: {e}")
+                self.logger.warning(f"Failed to read cache file: {e}")
 
         # Fetch fresh system info from server
         try:
@@ -1012,7 +1034,7 @@ class LemonadeClient:
 
                 if response.status_code == 200:
                     system_info = response.json()
-                    logger.info("Successfully retrieved system info from server")
+                    self.logger.info("Successfully retrieved system info from server")
 
                     # Cache the result
                     try:
@@ -1022,19 +1044,19 @@ class LemonadeClient:
                         }
                         with open(cache_file, "w", encoding="utf-8") as f:
                             json.dump(cache_data, f, indent=2)
-                        logger.info(f"Cached system info to {cache_file}")
+                        self.logger.info(f"Cached system info to {cache_file}")
                     except Exception as e:
-                        logger.warning(f"Failed to cache system info: {e}")
+                        self.logger.warning(f"Failed to cache system info: {e}")
 
                     return system_info
                 else:
-                    logger.warning(
+                    self.logger.warning(
                         f"System info request failed: HTTP {response.status_code}"
                     )
                     return None
 
         except Exception as e:
-            logger.error(f"Error fetching system info: {e}")
+            self.logger.error(f"Error fetching system info: {e}")
             return None
 
     def _parse_memory_size(self, memory_str: str) -> float:
@@ -1090,7 +1112,7 @@ class LemonadeClient:
                         else:
                             vram_gb = self._parse_memory_size(str(vram_value))
                         if vram_gb >= 15.9:
-                            logger.info(
+                            self.logger.info(
                                 f"Found NVIDIA discrete GPU with {vram_gb}GB VRAM"
                             )
                             return True
@@ -1107,11 +1129,13 @@ class LemonadeClient:
                         else:
                             vram_gb = self._parse_memory_size(str(vram_value))
                         if vram_gb >= 15.9:
-                            logger.info(f"Found AMD discrete GPU with {vram_gb}GB VRAM")
+                            self.logger.info(
+                                f"Found AMD discrete GPU with {vram_gb}GB VRAM"
+                            )
                             return True
 
         except Exception as e:
-            logger.warning(f"Error checking discrete GPU VRAM: {e}")
+            self.logger.warning(f"Error checking discrete GPU VRAM: {e}")
 
         return False
 
@@ -1136,7 +1160,7 @@ class LemonadeClient:
             inference_engines = npu.get("inference_engines", {})
             oga_available = inference_engines.get("oga", {}).get("available", False)
 
-            logger.info(
+            self.logger.info(
                 f"NPU hardware available: {npu_available}, OGA inference engine available: {oga_available}"
             )
             return npu_available and oga_available
@@ -1160,44 +1184,44 @@ class LemonadeClient:
         Returns:
             tuple[str, float]: (model_name, size_gb) based on hardware capabilities
         """
-        logger.info("Selecting model based on hardware capabilities...")
+        self.logger.info("Selecting model based on hardware capabilities...")
 
         # Get system info if not provided
         if system_info is None:
             system_info = await self.get_system_info(cache_dir=cache_dir)
 
         if system_info is None:
-            logger.warning("Could not get system info, using default model")
+            self.logger.warning("Could not get system info, using default model")
             return MODELS["default"]
 
         try:
             # Extract hardware information
             physical_memory_str = system_info.get("Physical Memory", "0 GB")
             memory_gb = self._parse_memory_size(physical_memory_str)
-            logger.info(f"System RAM: {memory_gb}GB")
+            self.logger.info(f"System RAM: {memory_gb}GB")
 
             devices = system_info.get("devices", {})
             has_high_vram_gpu = self._check_discrete_gpu_vram(devices)
             has_npu = self._is_npu_available(devices)
 
-            logger.info(f"High VRAM GPU available: {has_high_vram_gpu}")
-            logger.info(f"NPU available: {has_npu}")
+            self.logger.info(f"High VRAM GPU available: {has_high_vram_gpu}")
+            self.logger.info(f"NPU available: {has_npu}")
 
             # Apply selection logic
             if memory_gb >= 64.0 or has_high_vram_gpu:
                 selected_model = MODELS["high_end"]
-                logger.info(
+                self.logger.info(
                     f"Selected large model due to sufficient resources (RAM: {memory_gb}GB, High VRAM GPU: {has_high_vram_gpu})"
                 )
             elif has_npu:
                 selected_model = MODELS["npu"]
-                logger.info("Selected NPU-optimized model due to NPU availability")
+                self.logger.info("Selected NPU-optimized model due to NPU availability")
             else:
                 selected_model = MODELS["default"]
-                logger.info("Selected default model for standard hardware")
+                self.logger.info("Selected default model for standard hardware")
 
             return selected_model
 
         except Exception as e:
-            logger.error(f"Error in model selection logic: {e}")
+            self.logger.error(f"Error in model selection logic: {e}")
             return MODELS["default"]

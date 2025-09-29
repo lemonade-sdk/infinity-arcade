@@ -64,7 +64,7 @@ class ArcadeApp:
     def __init__(self) -> None:
         # Initialize basic components first
         self.lemonade_handle = lc.LemonadeClient(
-            minimum_version=LEMONADE_MINIMUM_VERSION
+            minimum_version=LEMONADE_MINIMUM_VERSION, logger=logger
         )
         self.arcade_games = ArcadeGames()
         self.game_launcher = GameLauncher()

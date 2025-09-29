@@ -83,21 +83,28 @@ Once the above steps complete successfully, your application can make inference 
 
 ## Constructor
 
-#### `LemonadeClient(minimum_version: str = "8.1.0")`
+#### `LemonadeClient(minimum_version: str = "8.1.0", logger=None)`
 Initialize a new LemonadeClient instance.
 
 **Parameters:**
 - `minimum_version` (str, optional): Minimum required version of lemonade-server. Defaults to "8.1.0". The client will check server compatibility against this version.
+- `logger` (logging.Logger, optional): Logger instance to use for logging. If None, creates a default logger named "lemonade_client".
 
 **When to use:** Create a client instance at the start of your application. Specify the minimum version your application requires to ensure compatibility.
 
 **Example:**
 ```python
-# Use default minimum version (8.1.0)
+import logging
+
+# Use default minimum version (8.1.0) and default logger
 client = LemonadeClient()
 
 # Specify custom minimum version
 client = LemonadeClient(minimum_version="8.1.9")
+
+# Use custom logger
+custom_logger = logging.getLogger("my_app")
+client = LemonadeClient(minimum_version="8.1.9", logger=custom_logger)
 
 # Version checking will use your specified minimum
 version_info = await client.check_lemonade_server_version()
