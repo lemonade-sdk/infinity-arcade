@@ -16,7 +16,7 @@ A comprehensive example showing the complete workflow for integrating LemonadeCl
 
 **Usage:**
 ```bash
-python lemonade-arcade/examples/lemonade_client_integration_example.py
+python infinity-arcade/examples/lemonade_client_integration_example.py
 ```
 
 This example uses the `Qwen3-0.6B-GGUF` model as it's lightweight and good for testing. You can modify the `required_model` variable to use different models as needed.

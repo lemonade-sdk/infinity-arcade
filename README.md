@@ -24,13 +24,13 @@
     <img src="https://img.shields.io/badge/Ubuntu-24.04%20%7C%2025.04-E95420?logo=ubuntu&logoColor=white" alt="Ubuntu 24.04 | 25.04" /></a>
   <a href="#installation" title="Check out our instructions">
     <img src="https://img.shields.io/badge/Python-3.10--3.13-blue?logo=python&logoColor=white" alt="Made with Python" /></a>
-  <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest" title="Download the latest release">
-    <img src="https://img.shields.io/github/v/release/lemonade-sdk/lemonade-arcade?include_prereleases" alt="Latest Release" /></a>
-  <a href="https://tooomm.github.io/github-release-stats/?username=lemonade-sdk&repository=lemonade-arcade">
-    <img src="https://img.shields.io/github/downloads/lemonade-sdk/lemonade-arcade/total.svg" alt="GitHub downloads" /></a>
-  <a href="https://github.com/lemonade-sdk/lemonade-arcade/blob/main/LICENSE">
+  <a href="https://github.com/lemonade-sdk/infinity-arcade/releases/latest" title="Download the latest release">
+    <img src="https://img.shields.io/github/v/release/lemonade-sdk/infinity-arcade?include_prereleases" alt="Latest Release" /></a>
+  <a href="https://tooomm.github.io/github-release-stats/?username=lemonade-sdk&repository=infinity-arcade">
+    <img src="https://img.shields.io/github/downloads/lemonade-sdk/infinity-arcade/total.svg" alt="GitHub downloads" /></a>
+  <a href="https://github.com/lemonade-sdk/infinity-arcade/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
-  <a href="https://star-history.com/#lemonade-sdk/lemonade-arcade">
+  <a href="https://star-history.com/#lemonade-sdk/infinity-arcade">
     <img src="https://img.shields.io/badge/Star%20History-View-brightgreen" alt="Star History Chart" /></a>
 </p>
 
@@ -57,7 +57,7 @@ Infinity Arcade will detect the hardware you have available and load a recommend
 
 <p align="center">Windows: click this:</p>
 <p align="center">
-   <a href="https://github.com/lemonade-sdk/lemonade-arcade/releases/latest/download/InfinityArcade.exe"><img src=img/icon.ico?raw=true alt="Arcade Quick Start"/></a>
+   <a href="https://github.com/lemonade-sdk/infinity-arcade/releases/latest/download/InfinityArcade.exe"><img src=img/icon.ico?raw=true alt="Arcade Quick Start"/></a>
 </p>
 
 <p align="center">
@@ -79,7 +79,7 @@ Infinity Arcade combines the convenience of a ChatGPT-like interface with the co
 
 ### Windows
 
-Navigate to the [Releases page](https://github.com/lemonade-sdk/lemonade-arcade/releases), download the .exe, and get started!
+Navigate to the [Releases page](https://github.com/lemonade-sdk/infinity-arcade/releases), download the .exe, and get started!
 
 ### Linux (and Windows Devs)
 
@@ -94,8 +94,8 @@ From Source:
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/lemonade-sdk/lemonade-arcade
-   cd lemonade-arcade
+   git clone https://github.com/lemonade-sdk/infinity-arcade
+   cd infinity-arcade
    ```
 
 2. Install the package:
