@@ -583,7 +583,7 @@ This example demonstrates:
 You can run the example directly to test your LemonadeClient setup:
 
 ```bash
-python lemonade-arcade/examples/lemonade_client_integration_example.py
+python infinity-arcade/examples/lemonade_client_integration_example.py
 ```
 
 The example includes comprehensive error handling and step-by-step progress reporting, making it suitable for both learning and as a starting point for your own integration.
