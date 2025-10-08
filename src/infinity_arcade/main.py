@@ -32,7 +32,7 @@ from infinity_arcade.game_orchestrator import GameOrchestrator
 from infinity_arcade.llm_service import LLMService
 
 # Minimum required version of lemonade-server
-LEMONADE_MINIMUM_VERSION = "8.1.10"
+LEMONADE_MINIMUM_VERSION = "8.1.12"
 
 
 # Pygame will be imported on-demand to avoid early DLL loading issues
