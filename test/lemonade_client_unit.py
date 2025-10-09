@@ -1249,8 +1249,8 @@ class TestLemonadeClient(unittest.TestCase):
         with patch.object(self.client, "get_system_info", return_value=system_info):
             model_name, size_gb = await self.client.select_model_for_hardware()
 
-            self.assertEqual(model_name, "Qwen-2.5-7B-Instruct-Hybrid")
-            self.assertEqual(size_gb, 8.4)
+            self.assertEqual(model_name, "Playable1-GGUF")
+            self.assertEqual(size_gb, 4.68)
 
     async def test_select_model_for_hardware_default(self):
         """Test model selection for default hardware."""
@@ -1266,8 +1266,8 @@ class TestLemonadeClient(unittest.TestCase):
         with patch.object(self.client, "get_system_info", return_value=system_info):
             model_name, size_gb = await self.client.select_model_for_hardware()
 
-            self.assertEqual(model_name, "Qwen3-4B-Instruct-2507-GGUF")
-            self.assertEqual(size_gb, 2.5)
+            self.assertEqual(model_name, "Playable1-GGUF")
+            self.assertEqual(size_gb, 4.68)
 
     async def test_select_model_for_hardware_system_info_failure(self):
         """Test model selection when system info fails."""
@@ -1275,8 +1275,8 @@ class TestLemonadeClient(unittest.TestCase):
             model_name, size_gb = await self.client.select_model_for_hardware()
 
             # Should return default model
-            self.assertEqual(model_name, "Qwen3-4B-Instruct-2507-GGUF")
-            self.assertEqual(size_gb, 2.5)
+            self.assertEqual(model_name, "Playable1-GGUF")
+            self.assertEqual(size_gb, 4.68)
 
 
 def run_async_test(coro):

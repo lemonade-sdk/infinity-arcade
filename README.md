@@ -47,8 +47,8 @@ Infinity Arcade will detect the hardware you have available and load a recommend
 
 | Configuration | GPU/APU | Memory | Disk Space | LLM |
 |---------------|---------|---------|---------|---------|
-| **Minimum (CPU)** | Ryzen AI 7000-series chip or newer | 32 GB RAM | 3 GB | Qwen3-4B-Instruct |
-| **Suggested (NPU)** | Ryzen AI 300-series chip or newer | 32 GB RAM | 10 GB | Qwen-2.5-7B-Instruct-Hybrid |
+| **Minimum (CPU)** | Ryzen AI 7000-series chip or newer | 32 GB RAM | 5 GB | [Playable1-GGUF](https://huggingface.co/playable/Playable1-GGUF) |
+| **Suggested (iGPU)** | Ryzen AI 300-series chip or newer | 32 GB RAM | 5 GB | [Playable1-GGUF](https://huggingface.co/playable/Playable1-GGUF) |
 | **Suggested (dGPU)** | Radeon 7800XT or newer | 16 GB VRAM | 20 GB | Qwen3-Coder-30B |
 | **Suggested (APU)** | Strix Halo (Ryzen AI MAX 395) | 64 GB unified memory | 20 GB | Qwen3-Coder-30B |
 
