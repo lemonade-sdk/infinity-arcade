@@ -15,8 +15,8 @@ import httpx
 # Model information: (model_name, size_gb)
 MODELS = {
     "high_end": ("Qwen3-Coder-30B-A3B-Instruct-GGUF", 18.6),
-    "npu": ("Qwen-2.5-7B-Instruct-Hybrid", 8.4),
-    "default": ("Qwen3-4B-Instruct-2507-GGUF", 2.5),
+    "npu": ("Playable1-GGUF", 4.68),
+    "default": ("Playable1-GGUF", 4.68),
 }
 
 

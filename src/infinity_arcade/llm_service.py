@@ -156,61 +156,18 @@ Generate ONLY the Python code wrapped in a markdown code block using triple back
             {"role": "user", "content": user_prompt},
         ]
     elif mode == "debug":
-        error_type = None
-        if mode_data and "UnboundLocalError" in mode_data:
-            error_type = "UnboundLocalError"
-        elif mode_data and "NameError" in mode_data:
-            error_type = "NameError"
-        elif mode_data and "AttributeError" in mode_data:
-            error_type = "AttributeError"
-        elif mode_data and "TypeError" in mode_data:
-            error_type = "TypeError"
-        elif mode_data and "IndexError" in mode_data:
-            error_type = "IndexError"
 
-        error_guidance = ""
-        if error_type == "UnboundLocalError":
-            error_guidance = """UnboundLocalError. To fix:
-Add 'global variable_name' at the start of the function that's trying to modify a global variable."""
-        elif error_type == "NameError":
-            error_guidance = """NameError. To fix:
-Either define the missing variable or fix the typo in the variable name."""
-        elif error_type == "AttributeError":
-            error_guidance = """AttributeError. To fix:
-Use the correct method/attribute name or check the object type."""
-        elif error_type == "TypeError":
-            error_guidance = """TypeError. To fix:
-Fix the function arguments or type mismatch."""
-        elif error_type == "IndexError":
-            error_guidance = """IndexError. To fix:
-Check list/array bounds before accessing."""
+        system_prompt = "You are a Python expert debugging a pygame script that has an error. Generate ONLY the fixed Python code wrapped in a markdown code block using triple backticks (```python). Do not include any explanations outside the code block."
 
-        system_prompt = """You are a Python expert debugging a pygame script that has an error.
-
-Output format:
-1. One sentence explaining the fix.
-2. Incorporate the fix into a code snippet in the style of a before/after git diff.
-    a. Show the fix and a couple surrounding lines of code.
-    b. ONLY 5-10 lines of code.
-3. Complete CORRECTED code wrapped in a markdown code block using triple backticks (```python).
-
-IMPORTANT:
-- The final code you output must have the fix applied.
-- Be CAREFUL not to get carried away repeating the old code.
-"""
-
-        user_prompt = f"""The code below has this error:
+        user_prompt = f"""Error:
 {mode_data}
 
-Here is some guidance on the error:
-
-{error_guidance}
-
-Look at the code below and give me a complete pygame script where the error is fixed:
-
+Script with error:
 ```python
 {content}
 ```
+
+Please fix the bug and provide the corrected code.
 """
         messages = [
             {"role": "system", "content": system_prompt},
@@ -228,9 +185,7 @@ Rules:
 6. Make sure the game window closes properly when the user clicks the X button
 7. Use reasonable colors and make the game visually appealing with pygame primitives
 
-Output format:
-    First, a one-sentence explanation of the modification in the context of the game, starting with a phrase like "I will modify the game to...".
-    Then, generate ONLY the complete modified Python code wrapped in a markdown code block using triple backticks (```python)."""
+Generate ONLY the complete modified Python code wrapped in a markdown code block using triple backticks (```python)."""
 
         user_prompt = f"""Here is the existing game code:
 
@@ -279,6 +234,8 @@ Provide the complete modified game code."""
             messages=messages,
             stream=True,
             max_tokens=4000,
+            temperature=0.3,
+            top_p=0.9,
         )
 
         full_response = ""
