@@ -243,11 +243,19 @@ class LemonadeClient:
                     )
 
                 # Python module fallback (most reliable after pip install)
-                commands_to_try.append([sys.executable, "-m", "lemonade_server"] + args)
+                # Only use sys.executable with -m flag in non-frozen environments
+                if not self.is_pyinstaller_environment():
+                    commands_to_try.append(
+                        [sys.executable, "-m", "lemonade_server"] + args
+                    )
             else:
                 # Linux/Unix: Try lemonade-server-dev first, then Python module fallback
                 commands_to_try.append(["lemonade-server-dev"] + args)
-                commands_to_try.append([sys.executable, "-m", "lemonade_server"] + args)
+                # Only use sys.executable with -m flag in non-frozen environments
+                if not self.is_pyinstaller_environment():
+                    commands_to_try.append(
+                        [sys.executable, "-m", "lemonade_server"] + args
+                    )
 
         for i, cmd in enumerate(commands_to_try):
             try:
