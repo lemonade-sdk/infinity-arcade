@@ -539,7 +539,7 @@ def main():
     print("Starting Infinity Arcade...")
     print("Press Ctrl+C to quit")
 
-    port = 8080
+    port = 8081
 
     # Start the server in a separate thread
     def run_server():

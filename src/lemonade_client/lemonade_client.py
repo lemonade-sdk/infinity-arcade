@@ -243,11 +243,19 @@ class LemonadeClient:
                     )
 
                 # Python module fallback (most reliable after pip install)
-                commands_to_try.append([sys.executable, "-m", "lemonade_server"] + args)
+                # Only use sys.executable with -m flag in non-frozen environments
+                if not self.is_pyinstaller_environment():
+                    commands_to_try.append(
+                        [sys.executable, "-m", "lemonade_server"] + args
+                    )
             else:
                 # Linux/Unix: Try lemonade-server-dev first, then Python module fallback
                 commands_to_try.append(["lemonade-server-dev"] + args)
-                commands_to_try.append([sys.executable, "-m", "lemonade_server"] + args)
+                # Only use sys.executable with -m flag in non-frozen environments
+                if not self.is_pyinstaller_environment():
+                    commands_to_try.append(
+                        [sys.executable, "-m", "lemonade_server"] + args
+                    )
 
         for i, cmd in enumerate(commands_to_try):
             try:
@@ -695,7 +703,7 @@ class LemonadeClient:
                     )
                     return {
                         "success": True,
-                        "message": "Installer launched. Please complete the installation and then restart Infinity Arcade.",
+                        "message": "Installer launched. Please complete the installation.",
                         "interactive": True,
                     }
                 else:
@@ -984,7 +992,7 @@ class LemonadeClient:
         unless cache_duration_hours is explicitly set.
 
         Args:
-            cache_dir: Directory to store cache file (defaults to ~/.infinity-arcade)
+            cache_dir: Directory to store cache file (defaults to ~/.cache/lemonade)
             cache_duration_hours: Hours to keep cached data (None = never expire, default)
 
         Returns:
