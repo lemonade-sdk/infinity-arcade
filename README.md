@@ -16,7 +16,7 @@
 </pre>
 
 <p align="center">
-  <a href="https://discord.gg/5xXzkMu8Zk">
+  <a href="https://discord.gg/GMNtbCUaX2">
     <img src="https://img.shields.io/badge/Discord-7289DA?logo=discord&logoColor=white" alt="Discord" /></a>
   <a href="docs/README.md#installation" title="Check out our instructions">
     <img src="https://img.shields.io/badge/Windows-11-0078D6?logo=windows&logoColor=white" alt="Windows 11" /></a>
