@@ -695,7 +695,7 @@ class LemonadeClient:
                     )
                     return {
                         "success": True,
-                        "message": "Installer launched. Please complete the installation and then restart Infinity Arcade.",
+                        "message": "Installer launched. Please complete the installation.",
                         "interactive": True,
                     }
                 else:
@@ -984,7 +984,7 @@ class LemonadeClient:
         unless cache_duration_hours is explicitly set.
 
         Args:
-            cache_dir: Directory to store cache file (defaults to ~/.infinity-arcade)
+            cache_dir: Directory to store cache file (defaults to ~/.cache/lemonade)
             cache_duration_hours: Hours to keep cached data (None = never expire, default)
 
         Returns:
