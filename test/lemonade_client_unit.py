@@ -28,7 +28,7 @@ class TestLemonadeClient(unittest.TestCase):
         self.assertIsNone(client.server_command)
         self.assertIsNone(client.server_process)
         self.assertEqual(client.url, "http://localhost:8000")
-        self.assertEqual(client.minimum_version, "8.1.0")  # Default value
+        self.assertEqual(client.minimum_version, "9.0.3")  # Default value
 
         # Test with custom minimum version
         custom_client = LemonadeClient(minimum_version="8.2.0")
@@ -151,11 +151,7 @@ class TestLemonadeClient(unittest.TestCase):
             ("C:\\Users\\User\\bin", 1),  # User PATH
         ]
 
-        # Mock Python Scripts discovery to return empty list
-        with patch.object(
-            self.client, "_discover_python_scripts_paths", return_value=[]
-        ):
-            self.client.refresh_environment()
+        self.client.refresh_environment()
 
         # Check that PATH was updated
         expected_path = "C:\\Users\\User\\bin;C:\\Windows\\System32;C:\\Program Files"
@@ -174,11 +170,7 @@ class TestLemonadeClient(unittest.TestCase):
         ]
 
         with patch("os.environ") as mock_environ:
-            # Mock Python Scripts discovery to return empty list
-            with patch.object(
-                self.client, "_discover_python_scripts_paths", return_value=[]
-            ):
-                self.client.refresh_environment()
+            self.client.refresh_environment()
             # Should still set PATH to system PATH only
             mock_environ.__setitem__.assert_called_with("PATH", "C:\\Windows\\System32")
 
@@ -230,7 +222,7 @@ class TestLemonadeClient(unittest.TestCase):
             result = await self.client.execute_lemonade_server_command(["--version"])
 
             self.assertEqual(result, mock_result)
-            self.assertEqual(self.client.server_command, ["lemonade-server-dev"])
+            self.assertEqual(self.client.server_command, ["lemonade-server"])
 
     async def test_execute_lemonade_server_command_linux_success(self):
         """Test executing command on Linux with successful result."""
@@ -245,7 +237,7 @@ class TestLemonadeClient(unittest.TestCase):
             result = await self.client.execute_lemonade_server_command(["--version"])
 
             self.assertEqual(result, mock_result)
-            self.assertEqual(self.client.server_command, ["lemonade-server-dev"])
+            self.assertEqual(self.client.server_command, ["lemonade-server"])
 
     async def test_execute_lemonade_server_command_popen_mode(self):
         """Test executing command with use_popen=True."""
@@ -279,36 +271,6 @@ class TestLemonadeClient(unittest.TestCase):
             result = await self.client.execute_lemonade_server_command(["--version"])
 
             self.assertIsNone(result)
-
-    async def test_check_lemonade_sdk_available_true(self):
-        """Test checking lemonade-sdk availability when available."""
-        with patch("subprocess.run") as mock_run:
-            mock_result = MagicMock()
-            mock_result.returncode = 0
-            mock_result.stdout = "available"
-            mock_run.return_value = mock_result
-
-            result = await self.client.check_lemonade_sdk_available()
-
-            self.assertTrue(result)
-
-    async def test_check_lemonade_sdk_available_false(self):
-        """Test checking lemonade-sdk availability when not available."""
-        with patch("subprocess.run") as mock_run:
-            mock_result = MagicMock()
-            mock_result.returncode = 1
-            mock_result.stdout = "error"
-            mock_run.return_value = mock_result
-
-            result = await self.client.check_lemonade_sdk_available()
-
-            self.assertFalse(result)
-
-    async def test_check_lemonade_sdk_available_exception(self):
-        """Test checking lemonade-sdk availability when exception occurs."""
-        with patch("subprocess.run", side_effect=Exception("Test error")):
-            result = await self.client.check_lemonade_sdk_available()
-            self.assertFalse(result)
 
     async def test_check_lemonade_server_version_success(self):
         """Test checking lemonade server version successfully."""
@@ -495,79 +457,13 @@ class TestLemonadeClient(unittest.TestCase):
             expected = {"success": False, "message": "Server process died immediately"}
             self.assertEqual(result, expected)
 
-    async def test_install_lemonade_sdk_package_success(self):
-        """Test installing lemonade-sdk package successfully."""
-        with patch("subprocess.run") as mock_run:
-            mock_result = MagicMock()
-            mock_result.returncode = 0
-            mock_run.return_value = mock_result
-
-            result = await self.client.install_lemonade_sdk_package()
-
-            expected = {
-                "success": True,
-                "message": "lemonade-sdk package installed successfully. You can now use 'lemonade-server-dev' command.",
-            }
-            self.assertEqual(result, expected)
-
-    async def test_install_lemonade_sdk_package_failure(self):
-        """Test installing lemonade-sdk package with failure."""
-        with patch("subprocess.run") as mock_run:
-            mock_result = MagicMock()
-            mock_result.returncode = 1
-            mock_result.stderr = "Installation failed"
-            mock_run.return_value = mock_result
-
-            result = await self.client.install_lemonade_sdk_package()
-
-            self.assertFalse(result["success"])
-            self.assertIn("pip install failed", result["message"])
-
-    async def test_install_lemonade_sdk_package_exception(self):
-        """Test installing lemonade-sdk package with exception."""
-        with patch("subprocess.run", side_effect=Exception("Test error")):
-            result = await self.client.install_lemonade_sdk_package()
-
-            self.assertFalse(result["success"])
-            self.assertIn("Failed to install", result["message"])
-
-    @patch.object(LemonadeClient, "reset_server_state")
-    @patch.object(LemonadeClient, "is_pyinstaller_environment")
-    @patch.object(LemonadeClient, "install_lemonade_sdk_package")
-    async def test_download_and_install_lemonade_server_pip_success(
-        self, mock_install, mock_pyinstaller, mock_reset
-    ):
-        """Test downloading and installing lemonade server via pip successfully."""
-        mock_pyinstaller.return_value = False
-        mock_install.return_value = {"success": True, "message": "Success"}
-
-        result = await self.client.download_and_install_lemonade_server()
-
-        self.assertTrue(result["success"])
-        mock_reset.assert_called_once()
-        mock_install.assert_called_once()
-
-    @patch.object(LemonadeClient, "reset_server_state")
-    @patch.object(LemonadeClient, "is_pyinstaller_environment")
-    @patch.object(LemonadeClient, "install_lemonade_sdk_package")
-    async def test_download_and_install_lemonade_server_pip_failure(
-        self, mock_install, mock_pyinstaller, mock_reset
-    ):
-        """Test downloading and installing lemonade server when pip fails."""
-        mock_pyinstaller.return_value = False
-        mock_install.return_value = {"success": False, "message": "Pip failed"}
-
-        result = await self.client.download_and_install_lemonade_server()
-
-        self.assertFalse(result["success"])
-        self.assertIn("github.com", result["message"])
-
     @patch("tempfile.mkdtemp")
     @patch("subprocess.Popen")
     @patch("httpx.AsyncClient")
     @patch("time.sleep")
     @patch.object(LemonadeClient, "reset_server_state")
     @patch.object(LemonadeClient, "is_pyinstaller_environment")
+    @patch("sys.platform", "win32")
     async def test_download_and_install_lemonade_server_installer_success(
         self,
         mock_pyinstaller,
@@ -626,6 +522,7 @@ class TestLemonadeClient(unittest.TestCase):
     @patch("time.sleep")
     @patch.object(LemonadeClient, "reset_server_state")
     @patch.object(LemonadeClient, "is_pyinstaller_environment")
+    @patch("sys.platform", "win32")
     async def test_download_and_install_lemonade_server_installer_process_dies(
         self,
         mock_pyinstaller,
@@ -673,8 +570,8 @@ class TestLemonadeClient(unittest.TestCase):
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to launch installer", result["message"])
-        self.assertIn("github_link", result)
-        self.assertIn("Lemonade_Server_Installer.exe", result["github_link"])
+        self.assertIn("install_link", result)
+        self.assertIn("lemonade-server-minimal.msi", result["install_link"])
         mock_reset.assert_called_once()
         mock_sleep.assert_called_once_with(1)  # Verify 1 second wait
         mock_process.poll.assert_called_once()  # Verify process status check
@@ -685,6 +582,7 @@ class TestLemonadeClient(unittest.TestCase):
     @patch("time.sleep")
     @patch.object(LemonadeClient, "reset_server_state")
     @patch.object(LemonadeClient, "is_pyinstaller_environment")
+    @patch("sys.platform", "win32")
     async def test_download_and_install_lemonade_server_installer_launch_exception(
         self,
         mock_pyinstaller,
@@ -731,8 +629,8 @@ class TestLemonadeClient(unittest.TestCase):
         self.assertIn(
             "Failed to launch installer: Permission denied", result["message"]
         )
-        self.assertIn("github_link", result)
-        self.assertIn("Lemonade_Server_Installer.exe", result["github_link"])
+        self.assertIn("install_link", result)
+        self.assertIn("lemonade-server-minimal.msi", result["install_link"])
         mock_reset.assert_called_once()
         # time.sleep should not be called if Popen raises exception
         mock_sleep.assert_not_called()

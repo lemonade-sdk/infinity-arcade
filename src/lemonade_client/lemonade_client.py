@@ -27,7 +27,7 @@ class LemonadeClient:
     by automating many common tasks.
     """
 
-    def __init__(self, minimum_version: str = "8.1.0", logger=None):
+    def __init__(self, minimum_version: str = "9.0.3", logger=None):
         # Track which command is used for this server instance
         self.server_command = None
         # Track the server process to avoid starting multiple instances
@@ -46,8 +46,7 @@ class LemonadeClient:
         Check if the application is running in a PyInstaller bundle environment.
 
         Use this when your app needs to determine installation method preferences
-        or adjust behavior based on deployment type. PyInstaller environments
-        typically prefer installer-based server installation over pip.
+        or adjust behavior based on deployment type.
 
         Returns:
             bool: True if running in PyInstaller bundle, False otherwise
@@ -136,15 +135,6 @@ class LemonadeClient:
                 if user_path:
                     new_path = user_path + ";" + system_path
 
-                # Also add common Python Scripts directories that pip might use
-                python_scripts_paths = self._discover_python_scripts_paths()
-
-                # Add these paths to the PATH if they're not already there
-                for scripts_path in python_scripts_paths:
-                    if scripts_path.lower() not in new_path.lower():
-                        new_path = scripts_path + ";" + new_path
-                        self.logger.info(f"Added {scripts_path} to PATH")
-
                 os.environ["PATH"] = new_path
                 self.logger.info(
                     f"Updated PATH: {new_path[:200]}..."
@@ -156,32 +146,6 @@ class LemonadeClient:
 
         except Exception as e:
             self.logger.warning(f"Failed to refresh environment: {e}")
-
-    def _discover_python_scripts_paths(self):
-        """Discover Python Scripts directories where pip installs console scripts."""
-        python_scripts_paths = []
-
-        # Add Python Scripts directory (where pip installs console scripts)
-        python_base = os.path.dirname(sys.executable)
-        scripts_dir = os.path.join(python_base, "Scripts")
-        if os.path.exists(scripts_dir):
-            python_scripts_paths.append(scripts_dir)
-            self.logger.info(f"Found Python Scripts directory: {scripts_dir}")
-
-        # Add user site-packages Scripts directory
-        try:
-            import site
-
-            user_site = site.getusersitepackages()
-            if user_site:
-                user_scripts = os.path.join(os.path.dirname(user_site), "Scripts")
-                if os.path.exists(user_scripts):
-                    python_scripts_paths.append(user_scripts)
-                    self.logger.info(f"Found user Scripts directory: {user_scripts}")
-        except Exception:
-            pass
-
-        return python_scripts_paths
 
     async def execute_lemonade_server_command(
         self,
@@ -195,8 +159,8 @@ class LemonadeClient:
         Execute lemonade-server commands using the best available method for the system.
 
         Use this as the primary interface for running any lemonade-server command. The method
-        automatically tries different installation methods (pip, installer, dev) and caches
-        the successful command for future use. Essential for cross-platform compatibility.
+        automatically tries different installation methods and caches the successful command
+        for future use. Essential for cross-platform compatibility.
 
         Args:
             args: Command arguments to pass to lemonade-server (e.g., ["--version"], ["serve"])
@@ -221,15 +185,11 @@ class LemonadeClient:
             commands_to_try = []
 
             if sys.platform == "win32":
-                # Windows: Try traditional commands first, then Python module fallback
-                if not self.is_pyinstaller_environment():
-                    commands_to_try.append(["lemonade-server-dev"] + args)
-
                 # Windows traditional commands
                 commands_to_try.extend(
                     [
                         ["lemonade-server"] + args,
-                        ["lemonade-server.bat"] + args,
+                        ["lemonade-server.exe"] + args,
                     ]
                 )
 
@@ -238,24 +198,11 @@ class LemonadeClient:
                     commands_to_try.extend(
                         [
                             [os.path.join(bin_path, "lemonade-server.exe")] + args,
-                            [os.path.join(bin_path, "lemonade-server.bat")] + args,
                         ]
                     )
-
-                # Python module fallback (most reliable after pip install)
-                # Only use sys.executable with -m flag in non-frozen environments
-                if not self.is_pyinstaller_environment():
-                    commands_to_try.append(
-                        [sys.executable, "-m", "lemonade_server"] + args
-                    )
             else:
-                # Linux/Unix: Try lemonade-server-dev first, then Python module fallback
-                commands_to_try.append(["lemonade-server-dev"] + args)
-                # Only use sys.executable with -m flag in non-frozen environments
-                if not self.is_pyinstaller_environment():
-                    commands_to_try.append(
-                        [sys.executable, "-m", "lemonade_server"] + args
-                    )
+                # Linux/Unix: Try lemonade-server command
+                commands_to_try.append(["lemonade-server"] + args)
 
         for i, cmd in enumerate(commands_to_try):
             try:
@@ -338,58 +285,6 @@ class LemonadeClient:
         self.logger.error("All lemonade-server commands failed")
         return None
 
-    async def check_lemonade_sdk_available(self):
-        """
-        Check if the lemonade-sdk Python package is installed and importable.
-
-        Use this to determine if pip-based installation is available before attempting
-        SDK-based operations. Helpful for showing installation options to users or
-        choosing between different installation methods.
-
-        Returns:
-            bool: True if lemonade-sdk package can be imported, False otherwise
-        """
-        self.logger.info("Checking for lemonade-sdk package...")
-        try:
-            # Handle Windows vs Unix path quoting differently
-            cmd = [sys.executable, "-c", "import lemonade_server; print('available')"]
-
-            if sys.platform == "win32":
-                # On Windows, quote paths with spaces using double quotes
-                quoted_args = []
-                for arg in cmd:
-                    if " " in arg:
-                        quoted_args.append(f'"{arg}"')
-                    else:
-                        quoted_args.append(arg)
-                cmd_str = " ".join(quoted_args)
-            else:
-                # On Unix systems, use shlex.quote
-                import shlex
-
-                cmd_str = " ".join(shlex.quote(arg) for arg in cmd)
-
-            self.logger.debug(f"Executing command: {cmd_str}")
-            result = subprocess.run(
-                cmd_str,
-                capture_output=True,
-                text=True,
-                timeout=10,
-                shell=True,  # Keep shell=True for environment handling
-                check=False,  # Don't raise exception on non-zero exit
-            )
-
-            self.logger.debug(
-                f"Command result: returncode={result.returncode}, "
-                f"stdout='{result.stdout.strip()}', stderr='{result.stderr.strip()}'"
-            )
-            is_available = result.returncode == 0 and "available" in result.stdout
-            self.logger.info(f"lemonade-sdk package available: {is_available}")
-            return is_available
-        except Exception as e:
-            self.logger.info(f"lemonade-sdk package check failed: {e}")
-            return False
-
     async def check_lemonade_server_version(self):
         """
         Check lemonade-server installation status and version compatibility.
@@ -418,7 +313,7 @@ class LemonadeClient:
         version_line = result.stdout.strip()
         self.logger.info(f"Raw version output: '{version_line}'")
 
-        # Extract version number (format might be "lemonade-server 8.1.3" or just "8.1.3")
+        # Extract version number (format might be "lemonade-server 9.0.0" or just "9.0.0")
         version_match = re.search(r"(\d+\.\d+\.\d+)", version_line)
         if version_match:
             version = version_match.group(1)
@@ -573,161 +468,105 @@ class LemonadeClient:
 
             return {"success": False, "message": "Server process died immediately"}
 
-    async def install_lemonade_sdk_package(self):
-        """
-        Install the lemonade-sdk Python package using pip.
-
-        Use this to install lemonade-server via pip when in development environments
-        or when the SDK approach is preferred. Provides access to lemonade-server-dev
-        command after successful installation.
-
-        Returns:
-            dict: Contains 'success' (bool) and 'message' (str) keys indicating
-                  installation result and any error details
-        """
-        try:
-            self.logger.info("Installing lemonade-sdk package using pip...")
-
-            # Install the package
-            result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "lemonade-sdk"],
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minutes timeout
-                check=True,
-            )
-
-            if result.returncode == 0:
-                self.logger.info("lemonade-sdk package installed successfully")
-                return {
-                    "success": True,
-                    "message": "lemonade-sdk package installed successfully. "
-                    "You can now use 'lemonade-server-dev' command.",
-                }
-            else:
-                error_msg = (
-                    result.stderr or result.stdout or "Unknown installation error"
-                )
-                self.logger.error(f"pip install failed: {error_msg}")
-                return {"success": False, "message": f"pip install failed: {error_msg}"}
-
-        except Exception as e:
-            self.logger.error(f"Failed to install lemonade-sdk package: {e}")
-            return {"success": False, "message": f"Failed to install: {e}"}
-
     async def download_and_install_lemonade_server(self):
         """
-        Download and install lemonade-server using the best method for the environment.
+        Download and install lemonade-server using the platform-specific installer.
 
-        Use this as the primary installation method. Automatically chooses between pip
-        installation (development environments) or executable installer (PyInstaller bundles).
-        Handles the complete installation process including download and setup.
+        Use this as the primary installation method. On Windows, downloads and launches the
+        MSI installer. On Linux, directs users to the installation options page.
 
         Returns:
             dict: Contains 'success' (bool), 'message' (str), and optionally 'interactive' (bool)
-                  or 'github_link' (str) keys with installation results and next steps
+                  or 'install_link' (str) keys with installation results and next steps
         """
 
         # Reset server state since we're installing/updating
         self.reset_server_state()
 
-        # If not in PyInstaller environment, prefer pip installation
-        if not self.is_pyinstaller_environment():
-            self.logger.info(
-                "Development environment detected, attempting pip installation first..."
-            )
-            pip_result = await self.install_lemonade_sdk_package()
-            if pip_result["success"]:
-                return pip_result
-            else:
-                self.logger.info(
-                    "pip installation failed, falling back to GitHub instructions..."
-                )
-                return {
-                    "success": False,
-                    "message": "Could not install lemonade-sdk package. "
-                    "Please visit https://github.com/lemonade-sdk/lemonade for "
-                    "installation instructions.",
-                    "github_link": "https://github.com/lemonade-sdk/lemonade",
-                }
+        if sys.platform == "win32":
+            # Windows: Use MSI installer
+            try:
+                # Download the MSI installer
+                # pylint: disable=line-too-long
+                installer_url = "https://github.com/lemonade-sdk/lemonade/releases/latest/download/lemonade-server-minimal.msi"
 
-        # PyInstaller environment or fallback - use installer for Windows
-        try:
-            # Download the installer
-            # pylint: disable=line-too-long
-            installer_url = "https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe"
+                # Create temp directory for installer
+                temp_dir = tempfile.mkdtemp()
+                installer_path = os.path.join(temp_dir, "lemonade-server-minimal.msi")
 
-            # Create temp directory for installer
-            temp_dir = tempfile.mkdtemp()
-            installer_path = os.path.join(temp_dir, "Lemonade_Server_Installer.exe")
+                self.logger.info(f"Downloading MSI installer from {installer_url}")
 
-            self.logger.info(f"Downloading installer from {installer_url}")
+                # Download with progress tracking
+                async with httpx.AsyncClient(
+                    timeout=300.0, follow_redirects=True
+                ) as client:
+                    async with client.stream("GET", installer_url) as response:
+                        if response.status_code != 200:
+                            return {
+                                "success": False,
+                                "message": f"Failed to download installer: HTTP {response.status_code}",
+                            }
 
-            # Download with progress tracking
-            async with httpx.AsyncClient(
-                timeout=300.0, follow_redirects=True
-            ) as client:
-                async with client.stream("GET", installer_url) as response:
-                    if response.status_code != 200:
+                        with open(installer_path, "wb") as f:
+                            async for chunk in response.aiter_bytes(8192):
+                                f.write(chunk)
+
+                self.logger.info(f"Downloaded installer to {installer_path}")
+
+                # Run MSI installer with msiexec
+                install_cmd = ["msiexec", "/i", installer_path]
+
+                self.logger.info(f"Running MSI installation: {' '.join(install_cmd)}")
+
+                # Start the installer but don't wait for it to complete
+                # This allows the user to see the installation UI
+                try:
+                    process = subprocess.Popen(install_cmd)
+
+                    # Wait a moment to see if the process stays alive
+                    time.sleep(1)
+
+                    # Check if the process is still running
+                    if process.poll() is None:
+                        # Process is still running, installer likely opened successfully
+                        self.logger.info(
+                            f"MSI Installer launched successfully with PID: {process.pid}"
+                        )
+                        return {
+                            "success": True,
+                            "message": "MSI Installer launched. Please complete the installation.",
+                            "interactive": True,
+                        }
+                    else:
+                        # Process died immediately
+                        self.logger.error(
+                            f"Installer process died immediately with return code: {process.returncode}"
+                        )
                         return {
                             "success": False,
-                            "message": f"Failed to download installer: HTTP {response.status_code}",
+                            "message": "Failed to launch installer. Please download and install manually from: https://github.com/lemonade-sdk/lemonade/releases/latest/download/lemonade-server-minimal.msi",
+                            "install_link": "https://github.com/lemonade-sdk/lemonade/releases/latest/download/lemonade-server-minimal.msi",
                         }
 
-                    with open(installer_path, "wb") as f:
-                        async for chunk in response.aiter_bytes(8192):
-                            f.write(chunk)
-
-            self.logger.info(f"Downloaded installer to {installer_path}")
-
-            # Run interactive installation (not silent)
-            install_cmd = [installer_path]
-
-            self.logger.info(
-                f"Running interactive installation: {' '.join(install_cmd)}"
-            )
-
-            # Start the installer but don't wait for it to complete
-            # This allows the user to see the installation UI
-            try:
-                process = subprocess.Popen(install_cmd)
-
-                # Wait a moment to see if the process stays alive
-                time.sleep(1)
-
-                # Check if the process is still running
-                if process.poll() is None:
-                    # Process is still running, installer likely opened successfully
-                    self.logger.info(
-                        f"Installer launched successfully with PID: {process.pid}"
-                    )
-                    return {
-                        "success": True,
-                        "message": "Installer launched. Please complete the installation.",
-                        "interactive": True,
-                    }
-                else:
-                    # Process died immediately
-                    self.logger.error(
-                        f"Installer process died immediately with return code: {process.returncode}"
-                    )
+                except Exception as launch_error:
+                    self.logger.error(f"Failed to launch installer: {launch_error}")
                     return {
                         "success": False,
-                        "message": "Failed to launch installer. Please download and install manually from: https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe",
-                        "github_link": "https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe",
+                        "message": f"Failed to launch installer: {launch_error}. Please download and install manually from: https://github.com/lemonade-sdk/lemonade/releases/latest/download/lemonade-server-minimal.msi",
+                        "install_link": "https://github.com/lemonade-sdk/lemonade/releases/latest/download/lemonade-server-minimal.msi",
                     }
 
-            except Exception as launch_error:
-                self.logger.error(f"Failed to launch installer: {launch_error}")
-                return {
-                    "success": False,
-                    "message": f"Failed to launch installer: {launch_error}. Please download and install manually from: https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe",
-                    "github_link": "https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe",
-                }
-
-        except Exception as e:
-            self.logger.error(f"Failed to download/install lemonade-server: {e}")
-            return {"success": False, "message": f"Failed to install: {e}"}
+            except Exception as e:
+                self.logger.error(f"Failed to download/install lemonade-server: {e}")
+                return {"success": False, "message": f"Failed to install: {e}"}
+        else:
+            # Linux: Direct users to installation options page
+            self.logger.info("Linux detected - directing user to installation page")
+            return {
+                "success": False,
+                "message": "Please visit https://lemonade-server.ai/install_options.html to download and install the latest .deb package for your system.",
+                "install_link": "https://lemonade-server.ai/install_options.html",
+            }
 
     async def check_lemonade_server_api(self):
         """
