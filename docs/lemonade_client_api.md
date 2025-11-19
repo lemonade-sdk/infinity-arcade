@@ -11,13 +11,10 @@ Here's the typical sequence of API calls for setting up a lemonade-server-based 
 from lemonade_client import LemonadeClient
 
 # Create client with minimum version requirement
-client = LemonadeClient(minimum_version="8.1.9")
+client = LemonadeClient(minimum_version="9.0.3")
 
 # Check deployment environment
 is_pyinstaller = client.is_pyinstaller_environment()
-
-# Check if SDK is available (for development environments)
-sdk_available = await client.check_lemonade_sdk_available()
 ```
 
 ### 2. Installation Status Check
@@ -83,11 +80,11 @@ Once the above steps complete successfully, your application can make inference 
 
 ## Constructor
 
-#### `LemonadeClient(minimum_version: str = "8.1.0", logger=None)`
+#### `LemonadeClient(minimum_version: str = "9.0.3", logger=None)`
 Initialize a new LemonadeClient instance.
 
 **Parameters:**
-- `minimum_version` (str, optional): Minimum required version of lemonade-server. Defaults to "8.1.0". The client will check server compatibility against this version.
+- `minimum_version` (str, optional): Minimum required version of lemonade-server. Defaults to "9.0.3". The client will check server compatibility against this version.
 - `logger` (logging.Logger, optional): Logger instance to use for logging. If None, creates a default logger named "lemonade_client".
 
 **When to use:** Create a client instance at the start of your application. Specify the minimum version your application requires to ensure compatibility.
@@ -96,15 +93,15 @@ Initialize a new LemonadeClient instance.
 ```python
 import logging
 
-# Use default minimum version (8.1.0) and default logger
+# Use default minimum version (9.0.3) and default logger
 client = LemonadeClient()
 
 # Specify custom minimum version
-client = LemonadeClient(minimum_version="8.1.9")
+client = LemonadeClient(minimum_version="9.0.5")
 
 # Use custom logger
 custom_logger = logging.getLogger("my_app")
-client = LemonadeClient(minimum_version="8.1.9", logger=custom_logger)
+client = LemonadeClient(minimum_version="9.0.5", logger=custom_logger)
 
 # Version checking will use your specified minimum
 version_info = await client.check_lemonade_server_version()
@@ -121,7 +118,7 @@ print(f"Compatible: {version_info['compatible']}")      # True if server >= mini
 #### `is_pyinstaller_environment()`
 Check if the application is running in a PyInstaller bundle environment.
 
-**When to use:** Determine installation method preferences or adjust behavior based on deployment type. PyInstaller environments typically prefer installer-based server installation over pip.
+**When to use:** Determine installation method preferences or adjust behavior based on deployment type.
 
 **Returns:** `bool` - True if running in PyInstaller bundle, False otherwise
 
@@ -129,10 +126,8 @@ Check if the application is running in a PyInstaller bundle environment.
 ```python
 if client.is_pyinstaller_environment():
     print("Running as packaged executable")
-    # Prefer installer-based installation
 else:
-    print("Running in development environment") 
-    # Can use pip installation
+    print("Running in development environment")
 ```
 
 ---
@@ -185,7 +180,7 @@ client.reset_server_state()
 #### `execute_lemonade_server_command(args, timeout=10, use_popen=False, stdout_file=None, stderr_file=None)`
 Execute lemonade-server commands using the best available method for the system.
 
-**When to use:** As the primary interface for running any lemonade-server command. The method automatically tries different installation methods (pip, installer, dev) and caches the successful command for future use. Essential for cross-platform compatibility.
+**When to use:** As the primary interface for running any lemonade-server command. The method automatically discovers the lemonade-server installation and caches the successful command for future use. Essential for cross-platform compatibility.
 
 **Parameters:**
 - `args: List[str]` - Command arguments to pass to lemonade-server (e.g., `["--version"]`, `["serve"]`)
@@ -214,23 +209,6 @@ process = await client.execute_lemonade_server_command(
 
 ### Installation and Setup
 
-#### `check_lemonade_sdk_available()`
-Check if the lemonade-sdk Python package is installed and importable.
-
-**When to use:** Determine if pip-based installation is available before attempting SDK-based operations. Helpful for showing installation options to users or choosing between different installation methods.
-
-**Returns:** `bool` - True if lemonade-sdk package can be imported, False otherwise
-
-**Example:**
-```python
-if await client.check_lemonade_sdk_available():
-    print("Can use lemonade-server-dev command")
-else:
-    print("Need to install via pip or use installer")
-```
-
----
-
 #### `check_lemonade_server_version()`
 Check lemonade-server installation status and version compatibility.
 
@@ -253,37 +231,20 @@ else:
 
 ---
 
-#### `install_lemonade_sdk_package()`
-Install the lemonade-sdk Python package using pip.
-
-**When to use:** Install lemonade-server via pip when in development environments or when the SDK approach is preferred. Provides access to lemonade-server-dev command after successful installation.
-
-**Returns:** `dict` with keys:
-- `success: bool` - Whether installation succeeded
-- `message: str` - Success message or error details
-
-**Example:**
-```python
-result = await client.install_lemonade_sdk_package()
-if result["success"]:
-    print("SDK installed successfully")
-    client.refresh_environment()
-else:
-    print(f"Installation failed: {result['message']}")
-```
-
----
-
 #### `download_and_install_lemonade_server()`
-Download and install lemonade-server using the best method for the environment.
+Download and install lemonade-server using the platform-specific installer.
 
-**When to use:** As the primary installation method. Automatically chooses between pip installation (development environments) or executable installer (PyInstaller bundles). Handles the complete installation process including download and setup.
+**When to use:** As the primary installation method. On Windows, downloads and launches the MSI installer. On Linux, directs users to the installation options page for manual .deb package installation.
+
+**Platform Behavior:**
+- **Windows**: Downloads `lemonade-server-minimal.msi` and launches it with `msiexec`
+- **Linux**: Returns instructions to visit `https://lemonade-server.ai/install_options.html` for .deb package download
 
 **Returns:** `dict` with keys:
-- `success: bool` - Whether installation succeeded
+- `success: bool` - Whether installation succeeded or launched successfully
 - `message: str` - Status message or error details
-- `interactive: bool` (optional) - Whether installer requires user interaction
-- `github_link: str` (optional) - Link for manual installation if automated fails
+- `interactive: bool` (optional) - Whether installer requires user interaction (Windows only)
+- `install_link: str` (optional) - Link for manual installation if automated fails
 
 **Example:**
 ```python
@@ -296,8 +257,8 @@ if result["success"]:
     client.reset_server_state()
 else:
     print(f"Installation failed: {result['message']}")
-    if "github_link" in result:
-        print(f"Manual installation: {result['github_link']}")
+    if "install_link" in result:
+        print(f"Manual installation: {result['install_link']}")
 ```
 
 ---

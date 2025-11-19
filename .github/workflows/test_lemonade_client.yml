@@ -46,14 +46,33 @@ jobs:
       run: |
         python test/lemonade_client_unit.py
 
-    # - name: Run integration tests
-    #   run: |
-    #     python test/lemonade_client_integration.py
-    #   env:
-    #     PYTHONUNBUFFERED: 1
+    - name: Download and install lemonade-server
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          echo "Downloading lemonade-server MSI installer..."
+          curl -L -o lemonade-server-minimal.msi https://github.com/lemonade-sdk/lemonade/releases/latest/download/lemonade-server-minimal.msi
+          echo "Installing lemonade-server in silent mode..."
+          msiexec //i lemonade-server-minimal.msi //qn //norestart
+          echo "Waiting for installation to complete..."
+          sleep 10
+        else
+          echo "Downloading lemonade-server .deb package..."
+          curl -L -o lemonade-server.deb https://github.com/lemonade-sdk/lemonade/releases/download/v9.0.3/lemonade-server-minimal_v9.0.3_amd64.deb
+          
+          echo "Installing lemonade-server..."
+          sudo dpkg -i lemonade-server.deb || sudo apt-get install -f -y
+        fi
+        echo "lemonade-server installation complete"
 
-    # - name: Test integration example
-    #   run: |
-    #     python examples/lemonade_client_integration_example.py
-    #   env:
-    #     PYTHONUNBUFFERED: 1
+    - name: Run integration tests
+      run: |
+        python test/lemonade_client_integration.py
+      env:
+        PYTHONUNBUFFERED: 1
+
+    - name: Test integration example
+      run: |
+        python examples/lemonade_client_integration_example.py
+      env:
+        PYTHONUNBUFFERED: 1
