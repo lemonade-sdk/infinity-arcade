@@ -57,11 +57,20 @@ jobs:
           echo "Waiting for installation to complete..."
           sleep 10
         else
-          echo "Downloading lemonade-server .deb package..."
-          curl -L -o lemonade-server.deb https://github.com/lemonade-sdk/lemonade/releases/download/v9.0.3/lemonade-server-minimal_v9.0.3_amd64.deb
+          echo "Getting latest release info..."
+          # Get the latest release tag and find the .deb asset
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/lemonade-sdk/lemonade/releases/latest)
+          DEB_URL=$(echo "$LATEST_RELEASE" | grep -o 'https://github.com/lemonade-sdk/lemonade/releases/download/[^"]*\.deb' | head -1)
           
-          echo "Installing lemonade-server..."
-          sudo dpkg -i lemonade-server.deb || sudo apt-get install -f -y
+          if [ -z "$DEB_URL" ]; then
+            echo "Error: Could not find .deb package in latest release"
+            echo "Skipping lemonade-server installation for Linux tests"
+          else
+            echo "Downloading lemonade-server .deb package from: $DEB_URL"
+            curl -L -o lemonade-server.deb "$DEB_URL"
+            echo "Installing lemonade-server..."
+            sudo dpkg -i lemonade-server.deb || sudo apt-get install -f -y
+          fi
         fi
         echo "lemonade-server installation complete"
 

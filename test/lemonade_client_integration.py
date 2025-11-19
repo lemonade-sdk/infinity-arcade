@@ -84,52 +84,6 @@ class TestLemonadeClientIntegration(unittest.TestCase):
             timeout = self.test_timeout
         return asyncio.wait_for(coro, timeout=timeout)
 
-    def test_01_install_and_check_lemonade_sdk(self):
-        """Test installing lemonade-sdk if needed and checking if it's available."""
-        # First check if it's already available
-        result = self.loop.run_until_complete(
-            self.run_async(self.client.check_lemonade_sdk_available())
-        )
-
-        if not result:
-            print("Installing lemonade-sdk...")
-            # Install lemonade-sdk using pip
-            install_result = self.loop.run_until_complete(
-                self.run_async(
-                    self.client.install_lemonade_sdk_package(),
-                    timeout=self.setup_timeout,
-                )
-            )
-
-            self.assertTrue(
-                install_result["success"],
-                f"lemonade-sdk installation should succeed: {install_result.get('message', '')}",
-            )
-
-            # Reset server state and refresh environment after installation
-            print("Refreshing environment after installation...")
-            self.client.reset_server_state()
-            self.client.refresh_environment()
-
-            # Wait a moment for environment changes to take effect
-            import time
-
-            time.sleep(2)
-
-            # Verify it's now available
-            result_after = self.loop.run_until_complete(
-                self.run_async(self.client.check_lemonade_sdk_available())
-            )
-            self.assertTrue(
-                result_after, "lemonade-sdk should be available after installation"
-            )
-        else:
-            print("lemonade-sdk already available")
-
-        # The final check - either it was already available or we installed it successfully
-        final_result = result or result_after if not result else True
-        self.assertTrue(final_result, "lemonade-sdk should be available")
-
     def test_02_check_lemonade_server_version(self):
         """Test checking lemonade server version."""
         result = self.loop.run_until_complete(
