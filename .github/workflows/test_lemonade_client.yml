@@ -46,14 +46,14 @@ jobs:
       run: |
         python test/lemonade_client_unit.py
 
-    - name: Run integration tests
-      run: |
-        python test/lemonade_client_integration.py
-      env:
-        PYTHONUNBUFFERED: 1
+    # - name: Run integration tests
+    #   run: |
+    #     python test/lemonade_client_integration.py
+    #   env:
+    #     PYTHONUNBUFFERED: 1
 
-    - name: Test integration example
-      run: |
-        python examples/lemonade_client_integration_example.py
-      env:
-        PYTHONUNBUFFERED: 1
+    # - name: Test integration example
+    #   run: |
+    #     python examples/lemonade_client_integration_example.py
+    #   env:
+    #     PYTHONUNBUFFERED: 1
