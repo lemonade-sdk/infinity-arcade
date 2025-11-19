@@ -46,33 +46,35 @@ jobs:
       run: |
         python test/lemonade_client_unit.py
 
-    - name: Download and install lemonade-server
+    - name: Download and install lemonade-server (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        Write-Host "Downloading lemonade-server MSI installer..."
+        Invoke-WebRequest -Uri "https://github.com/lemonade-sdk/lemonade/releases/latest/download/lemonade-server-minimal.msi" -OutFile "lemonade-server-minimal.msi"
+        Write-Host "Installing lemonade-server in silent mode..."
+        Start-Process msiexec.exe -ArgumentList "/i", "lemonade-server-minimal.msi", "/qn", "/norestart" -Wait
+        Write-Host "lemonade-server installation complete"
+
+    - name: Download and install lemonade-server (Linux)
+      if: runner.os == 'Linux'
       shell: bash
       run: |
-        if [ "$RUNNER_OS" == "Windows" ]; then
-          echo "Downloading lemonade-server MSI installer..."
-          curl -L -o lemonade-server-minimal.msi https://github.com/lemonade-sdk/lemonade/releases/latest/download/lemonade-server-minimal.msi
-          echo "Installing lemonade-server in silent mode..."
-          msiexec //i lemonade-server-minimal.msi //qn //norestart
-          echo "Waiting for installation to complete..."
-          sleep 10
+        echo "Getting latest release info..."
+        # Get the latest release tag and find the .deb asset
+        LATEST_RELEASE=$(curl -s https://api.github.com/repos/lemonade-sdk/lemonade/releases/latest)
+        DEB_URL=$(echo "$LATEST_RELEASE" | grep -o 'https://github.com/lemonade-sdk/lemonade/releases/download/[^"]*\.deb' | head -1)
+        
+        if [ -z "$DEB_URL" ]; then
+          echo "Error: Could not find .deb package in latest release"
+          echo "Skipping lemonade-server installation for Linux tests"
         else
-          echo "Getting latest release info..."
-          # Get the latest release tag and find the .deb asset
-          LATEST_RELEASE=$(curl -s https://api.github.com/repos/lemonade-sdk/lemonade/releases/latest)
-          DEB_URL=$(echo "$LATEST_RELEASE" | grep -o 'https://github.com/lemonade-sdk/lemonade/releases/download/[^"]*\.deb' | head -1)
-          
-          if [ -z "$DEB_URL" ]; then
-            echo "Error: Could not find .deb package in latest release"
-            echo "Skipping lemonade-server installation for Linux tests"
-          else
-            echo "Downloading lemonade-server .deb package from: $DEB_URL"
-            curl -L -o lemonade-server.deb "$DEB_URL"
-            echo "Installing lemonade-server..."
-            sudo dpkg -i lemonade-server.deb || sudo apt-get install -f -y
-          fi
+          echo "Downloading lemonade-server .deb package from: $DEB_URL"
+          curl -L -o lemonade-server.deb "$DEB_URL"
+          echo "Installing lemonade-server..."
+          sudo dpkg -i lemonade-server.deb || sudo apt-get install -f -y
+          echo "lemonade-server installation complete"
         fi
-        echo "lemonade-server installation complete"
 
     - name: Run integration tests
       run: |
