@@ -32,7 +32,7 @@ from infinity_arcade.game_orchestrator import GameOrchestrator
 from infinity_arcade.llm_service import LLMService
 
 # Minimum required version of lemonade-server
-LEMONADE_MINIMUM_VERSION = "8.1.12"
+LEMONADE_MINIMUM_VERSION = "9.0.3"
 
 
 # Pygame will be imported on-demand to avoid early DLL loading issues
@@ -239,16 +239,16 @@ class ArcadeApp:
         async def installation_environment():
             logger.info("Installation environment endpoint called")
             is_pyinstaller = self.lemonade_handle.is_pyinstaller_environment()
-            sdk_available = (
-                await self.lemonade_handle.check_lemonade_sdk_available()
-                if not is_pyinstaller
-                else False
-            )
+            # Determine preferred installation method based on platform
+            if sys.platform == "win32":
+                preferred_method = "installer"
+            else:
+                preferred_method = "manual"
+
             result = {
                 "is_pyinstaller": is_pyinstaller,
-                "sdk_available": sdk_available,
                 "platform": sys.platform,
-                "preferred_method": "pip" if not is_pyinstaller else "installer",
+                "preferred_method": preferred_method,
             }
             logger.info(f"Returning installation environment: {result}")
             return JSONResponse(result)
